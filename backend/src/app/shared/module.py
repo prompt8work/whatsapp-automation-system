@@ -5,22 +5,25 @@ Bootstrap collects them: permissions go to the PermissionRegistry, job/event han
 background runners, routers into the FastAPI app. The platform never imports a feature module
 by name; feature modules are listed only in app/bootstrap/modules.py.
 
-Fields are added as the platform parts they plug into are built (router rules and flows come
-with the conversation engine in build step 3, purgers with retention in step 7).
+Fields are added as the platform parts they plug into are built (purgers come with retention
+in build step 7).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
 
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.shared.application.audit import AuditLogger
+from app.shared.application.conversation import Flow, RouterRule
 from app.shared.application.events import EventHandler
 from app.shared.application.jobs import JobHandler, JobScheduler
+from app.shared.application.messaging import Messenger
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.ids import IdGenerator
 from app.shared.kernel.roles import Role
@@ -44,9 +47,14 @@ class PlatformServices(Protocol):
     @property
     def jobs(self) -> JobScheduler: ...
 
+    @property
+    def messenger(self) -> Messenger: ...
+
 
 JobHandlerFactory = Callable[[PlatformServices], JobHandler]
 EventHandlerFactory = Callable[[PlatformServices], EventHandler]
+FlowFactory = Callable[[PlatformServices], Flow]
+RouterRuleFactory = Callable[[PlatformServices], RouterRule]
 
 
 def _no_routers(_: PlatformServices) -> Sequence[APIRouter]:
@@ -67,3 +75,8 @@ class ModuleDefinition:
     job_handlers: Mapping[str, JobHandlerFactory] = field(default_factory=dict)
     # DomainEvent class name -> handler factories.
     event_handlers: Mapping[str, Sequence[EventHandlerFactory]] = field(default_factory=dict)
+    # WhatsApp conversations (ARCHITECTURE §7): flows, the rules that start them, and the
+    # folder with this module's bot sentences (<lang>.toml).
+    flows: Sequence[FlowFactory] = ()
+    router_rules: Sequence[RouterRuleFactory] = ()
+    locales_dir: Path | None = None

@@ -5,9 +5,11 @@
     create-tenant --name "Sunrise Clinic" --slug sunrise-clinic --module appointments
     add-member --tenant sunrise-clinic --email dr@x.com --name "Dr Amit" --role doctor
     connect-whatsapp --tenant sunrise-clinic --phone-number-id 1098... --display-phone "+91 ..."
+    set-credentials --phone-number-id 1098...        # Meta access token, prompted, stored encrypted
+    simulate --tenant sunrise-clinic --from 919876543210   # chat with the bot in the terminal
     tick        # run due events/jobs once (local dev, instead of Vercel Cron)
 
-Passwords are prompted (never pass them on the command line - shell history).
+Passwords and tokens are prompted (never pass secrets on the command line - shell history).
 """
 
 from __future__ import annotations
@@ -16,70 +18,66 @@ import argparse
 import asyncio
 import getpass
 import sys
-from datetime import timedelta
+from datetime import UTC, datetime
+from uuid import uuid4
 
-from app.bootstrap.container import Container, build_container
-from app.bootstrap.modules import INSTALLED_MODULES, PLATFORM_MODULES
+from app.bootstrap.platform import Platform, build_platform
 from app.bootstrap.settings import get_settings
 from app.platform.identity.application.commands.create_user import CreateUserCommand
 from app.platform.identity.application.commands.members import AddMemberCommand
-from app.platform.identity.application.use_cases import IdentityUseCases
-from app.platform.identity.wiring import build_identity_use_cases
 from app.platform.jobs.application.dispatch_outbox import DispatchOutbox
 from app.platform.jobs.application.run_due_jobs import RunDueJobs
 from app.platform.jobs.infrastructure.unit_of_work import SqlJobsUnitOfWork
+from app.platform.messaging.application.commands.statuses import (
+    SetCredentials,
+    SetCredentialsCommand,
+)
+from app.platform.messaging.contracts import InboundKind, InboundMessage, WebhookBatch
+from app.platform.messaging.infrastructure.recording import RecordingGateway
 from app.platform.tenancy.application.commands.connect_whatsapp_number import (
     ConnectWhatsAppNumber,
     ConnectWhatsAppNumberCommand,
 )
 from app.platform.tenancy.application.commands.tenants import CreateTenant, CreateTenantCommand
-from app.platform.tenancy.application.queries.tenants import ListTenants
+from app.platform.tenancy.application.queries.tenants import ListTenants, ListWhatsAppNumbers
 from app.platform.tenancy.infrastructure.unit_of_work import SqlTenancyUnitOfWork
-from app.platform.tenancy.wiring import build_facade
 from app.shared.kernel.actor import Actor
 from app.shared.kernel.errors import DomainError
 from app.shared.kernel.ids import TenantId
+from app.shared.kernel.messages import Buttons, Choice, ListMenu, OutboundMessage
 from app.shared.kernel.roles import Role
 
 SYSTEM = Actor.system()
 
 
-def _identity(c: Container) -> IdentityUseCases:
-    return build_identity_use_cases(
-        c,
-        hasher=c.password_hasher,
-        tokens=c.access_tokens,
-        permissions=c.permissions,
-        directory=build_facade(c),
-        refresh_ttl=timedelta(days=c.settings.refresh_token_days),
-    )
-
-
-def _password(prompt: str = "Password (min 10 chars): ") -> str:
+def _secret(prompt: str, *, confirm: bool = True) -> str:
     first = getpass.getpass(prompt)
-    if getpass.getpass("Repeat password: ") != first:
-        sys.exit("Passwords do not match")
+    if confirm and getpass.getpass("Repeat: ") != first:
+        sys.exit("Values do not match")
     return first
 
 
-async def _tenant_id(c: Container, slug: str) -> TenantId:
-    tenants = await ListTenants(SqlTenancyUnitOfWork(c.session_factory, None))()
+async def _tenant_id(p: Platform, slug: str) -> TenantId:
+    tenants = await ListTenants(SqlTenancyUnitOfWork(p.container.session_factory, None))()
     for tenant in tenants:
         if tenant.slug == slug:
             return tenant.id
     sys.exit(f"No tenant with slug {slug!r}")
 
 
-async def run(args: argparse.Namespace, c: Container) -> None:
+async def run(args: argparse.Namespace, p: Platform) -> None:
+    c = p.container
+    platform_uow = SqlTenancyUnitOfWork(c.session_factory, None)
+
     if args.command == "create-superadmin":
-        user_id = await _identity(c).create_user(
-            CreateUserCommand(args.email, args.name, _password(), SYSTEM, is_super_admin=True)
+        password = _secret("Password (min 10 chars): ")
+        user_id = await p.identity.create_user(
+            CreateUserCommand(args.email, args.name, password, SYSTEM, is_super_admin=True)
         )
         print(f"Super-admin created: {user_id}")
 
     elif args.command == "create-tenant":
-        uow = SqlTenancyUnitOfWork(c.session_factory, None)
-        tenant = await CreateTenant(uow, c.clock, c.ids)(
+        tenant = await CreateTenant(platform_uow, c.clock, c.ids)(
             CreateTenantCommand(
                 args.name, args.slug, SYSTEM, timezone=args.timezone, modules=tuple(args.module)
             )
@@ -87,22 +85,29 @@ async def run(args: argparse.Namespace, c: Container) -> None:
         print(f"Tenant created: {tenant.id} ({tenant.slug})")
 
     elif args.command == "add-member":
-        tenant_id = await _tenant_id(c, args.tenant)
-        password = _password("Initial password (ignored if the user exists): ")
-        member = await _identity(c).add_member(
+        tenant_id = await _tenant_id(p, args.tenant)
+        password = _secret("Initial password (ignored if the user exists): ")
+        member = await p.identity.add_member(
             AddMemberCommand(tenant_id, args.email, args.name, Role(args.role), SYSTEM, password)
         )
         print(f"{member.email} is now {member.role} of {args.tenant}")
 
     elif args.command == "connect-whatsapp":
-        tenant_id = await _tenant_id(c, args.tenant)
-        uow = SqlTenancyUnitOfWork(c.session_factory, None)
-        number = await ConnectWhatsAppNumber(uow, c.clock, c.ids)(
+        tenant_id = await _tenant_id(p, args.tenant)
+        number = await ConnectWhatsAppNumber(platform_uow, c.clock, c.ids)(
             ConnectWhatsAppNumberCommand(
                 tenant_id, args.phone_number_id, args.display_phone, SYSTEM
             )
         )
         print(f"Connected {number.display_phone} -> {args.tenant}")
+
+    elif args.command == "set-credentials":
+        token = _secret("Meta access token: ", confirm=False)
+        await SetCredentials(c.credentials)(SetCredentialsCommand(args.phone_number_id, token))
+        print("Stored (encrypted).")
+
+    elif args.command == "simulate":
+        await _simulate(p, args)
 
     elif args.command == "tick":
         jobs_uow = SqlJobsUnitOfWork(c.session_factory)
@@ -111,43 +116,112 @@ async def run(args: argparse.Namespace, c: Container) -> None:
         print(f"events: {events}\njobs:   {jobs}")
 
 
+async def _simulate(p: Platform, args: argparse.Namespace) -> None:
+    """Chat with the bot exactly as WhatsApp would, but in the terminal (RecordingGateway)."""
+    gateway = p.container.whatsapp_gateway
+    if not isinstance(gateway, RecordingGateway):
+        sys.exit("simulate needs WHATSAPP_SENDER=recording (it must not message real people)")
+    tenant_id = await _tenant_id(p, args.tenant)
+    numbers = await ListWhatsAppNumbers(SqlTenancyUnitOfWork(p.container.session_factory, None))(
+        tenant_id
+    )
+    if not numbers:
+        sys.exit("Connect a WhatsApp number first (locally any digits work): connect-whatsapp ...")
+    phone_number_id = numbers[0].phone_number_id
+    scripted: list[str] | None = list(args.text) if args.text else None
+    if scripted is None:
+        print(
+            f"Chatting with {args.tenant} as {args.sender}. Type a message; a number picks a "
+            "button; an empty line quits.\n"
+        )
+    choices: tuple[Choice, ...] = ()
+    while True:
+        if scripted is not None:
+            if not scripted:
+                return
+            text = scripted.pop(0)
+            print(f"you> {text}")
+        else:
+            text = (await asyncio.to_thread(input, "you> ")).strip()
+            if not text:
+                return
+        kind, choice_id = InboundKind.TEXT, None
+        if text.isdigit() and 0 < int(text) <= len(choices):
+            picked = choices[int(text) - 1]
+            kind, choice_id, text = InboundKind.CHOICE, picked.id, picked.title
+        message = InboundMessage(
+            phone_number_id=phone_number_id,
+            wa_message_id=f"wamid.sim.{uuid4().hex}",
+            wa_id=args.sender,
+            profile_name=args.name,
+            sent_at=datetime.now(UTC),
+            kind=kind,
+            text=text,
+            choice_id=choice_id,
+        )
+        already = len(gateway.sent)
+        await p.conversations.handle_webhook(WebhookBatch(messages=[message], statuses=[]))
+        for sent in gateway.sent[already:]:
+            print(_render(sent.message))
+            choices = _choices(sent.message) or choices
+
+
+def _choices(message: OutboundMessage) -> tuple[Choice, ...]:
+    return message.choices if isinstance(message, Buttons | ListMenu) else ()
+
+
+def _render(message: OutboundMessage) -> str:
+    return "bot> " + message.as_text().replace("\n", "\n     ") + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="app.bootstrap.cli")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("create-superadmin")
-    p.add_argument("--email", required=True)
-    p.add_argument("--name", required=True)
+    cmd = sub.add_parser("create-superadmin")
+    cmd.add_argument("--email", required=True)
+    cmd.add_argument("--name", required=True)
 
-    p = sub.add_parser("create-tenant")
-    p.add_argument("--name", required=True)
-    p.add_argument("--slug", required=True)
-    p.add_argument("--timezone", default="Asia/Kolkata")
-    p.add_argument("--module", action="append", default=[], help="repeatable")
+    cmd = sub.add_parser("create-tenant")
+    cmd.add_argument("--name", required=True)
+    cmd.add_argument("--slug", required=True)
+    cmd.add_argument("--timezone", default="Asia/Kolkata")
+    cmd.add_argument("--module", action="append", default=[], help="repeatable")
 
-    p = sub.add_parser("add-member")
-    p.add_argument("--tenant", required=True, help="tenant slug")
-    p.add_argument("--email", required=True)
-    p.add_argument("--name", required=True)
-    p.add_argument("--role", required=True, choices=[r.value for r in Role])
+    cmd = sub.add_parser("add-member")
+    cmd.add_argument("--tenant", required=True, help="tenant slug")
+    cmd.add_argument("--email", required=True)
+    cmd.add_argument("--name", required=True)
+    cmd.add_argument("--role", required=True, choices=[r.value for r in Role])
 
-    p = sub.add_parser("connect-whatsapp")
-    p.add_argument("--tenant", required=True, help="tenant slug")
-    p.add_argument("--phone-number-id", required=True)
-    p.add_argument("--display-phone", required=True)
+    cmd = sub.add_parser("connect-whatsapp")
+    cmd.add_argument("--tenant", required=True, help="tenant slug")
+    cmd.add_argument("--phone-number-id", required=True)
+    cmd.add_argument("--display-phone", required=True)
+
+    cmd = sub.add_parser("set-credentials")
+    cmd.add_argument("--phone-number-id", required=True)
+
+    cmd = sub.add_parser("simulate")
+    cmd.add_argument("--tenant", required=True, help="tenant slug")
+    cmd.add_argument("--from", dest="sender", default="919800000001", help="sender wa_id")
+    cmd.add_argument("--name", default="Test Patient", help="WhatsApp profile name")
+    cmd.add_argument(
+        "--text", action="append", help="scripted message (repeatable); omit for interactive"
+    )
 
     sub.add_parser("tick")
 
     args = parser.parse_args()
-    container = build_container(get_settings(), [*PLATFORM_MODULES, *INSTALLED_MODULES])
+    platform = build_platform(get_settings())
 
     async def _main() -> None:
         try:
-            await run(args, container)
+            await run(args, platform)
         except DomainError as exc:
             sys.exit(f"Error ({exc.code}): {exc.message}")
         finally:
-            await container.engine.dispose()
+            await platform.container.engine.dispose()
 
     asyncio.run(_main())
 

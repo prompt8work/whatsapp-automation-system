@@ -1,0 +1,7 @@
+# Bot sentences of this module. Use as ctx.t("_template.<key>", param=value).
+# Never put sentences shown to people in Python code (ADR-010).
+
+[_template]
+ask_name = "What should the new item be called?"
+invalid_name = "Please send a name between 1 and 100 characters."
+created = "Done! I created \"{name}\"."

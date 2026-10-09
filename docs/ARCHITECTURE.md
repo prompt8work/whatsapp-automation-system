@@ -326,6 +326,15 @@ HTTP_STATUS = {                                   BOT_MESSAGE = {
 
 ## 7. Conversation engine (platform/conversations)
 
+### 7.0 Where the pieces live (as built)
+
+- **Plug-in API** (`app/shared/application/conversation.py`): `Step`, `BaseStep`, `Flow`, `RouterRule`, `FlowContext`, `InboundReply`, results `Next / Retry / Finish / StartFlow`. Modules write flows against this only.
+- **Message types** (`app/shared/kernel/messages.py`): `Text`, `Buttons`, `ListMenu`, `Template`, `menu()`. **Sending** from any module: the `Messenger` port (`services.messenger`), which enforces the 24-hour window, logs the message and retries transient failures (`messaging.retry_send` job).
+- **Engine** (`app/platform/conversations`): pipeline, router, flow registry, sessions, global commands (STOP / START / MENU / AGENT), `AskConsent` step (via `conversations.contracts.consent_step`).
+- **A module's flow** = steps in `presentation/whatsapp/steps.py`, rules in `presentation/whatsapp/rules.py`, the `Flow(...)` assembled in the module's `wiring.py` (it combines presentation + infrastructure, so it is composition), texts in `locales/en.toml`.
+- **Contracts vs integration:** a module's `contracts.py` exports only framework-free types (safe for other modules' application layers); wiring-level helpers go in `integration.py` (e.g. `messaging.integration`). import-linter enforces this.
+- **Safety net:** the webhook stores each message first (unique `wa_message_id`), schedules `conversations.process_inbound` for +2 min, processes, then cancels the job. A crash mid-processing is retried by the job; a Meta re-delivery is recognised as a duplicate.
+
 ### 7.1 Inbound pipeline: a chain of responsibility (PRD PL-3.2)
 
 ```
@@ -564,10 +573,10 @@ This shows which file does what, in order. Use it as a pattern when building any
 5. Tests: a unit test using the fake UoW.
 
 ### 11.3 Add a step to a WhatsApp flow (e.g. ask "first visit?")
-1. Create `steps/ask_first_visit.py` implementing `Step`. Return `Skip` if the answer is already known.
-2. Add the text keys to `locales/en.yaml`.
-3. Insert the step in the right place in `flows/booking.py`'s `steps=[…]`.
-4. Add a flow test with a scripted conversation.
+1. Create the step class in `presentation/whatsapp/steps.py` (subclass `BaseStep`): `prompt` says the question, `handle` returns `Next()` / `Retry("key")` / `Finish()`, `should_skip` returns True if the answer is already known.
+2. Add the text keys to `locales/en.toml`.
+3. Insert the step in the right place in the `Flow(...)` in the module's `wiring.py`.
+4. Add a flow test with `ConversationHarness` (`await chat.send("hi")`, `await chat.tap(1)`): see `modules/_template/tests/test_whatsapp.py`.
 
 ### 11.4 Add a greeting/router rule (e.g. R12 "birthday greeting")
 Create a class implementing `RouterRule` with the right `priority`, and add it to `module.py → router_rules`. The router and other rules stay as they are.
@@ -647,7 +656,7 @@ Short ADRs live in `docs/adr/NNN-title.md`. These are the first ones:
 
 1. ✅ **Skeleton** (done 2026-10-10): repo layout, tooling (uv, ruff, mypy, import-linter, Vite, ESLint), CI, `shared/kernel`, the DB session with RLS, the Alembic baseline, and the `_template` module.
 2. ✅ **Platform foundations** (done 2026-10-10): tenancy, identity and auth, contacts, audit, outbox and dispatcher, jobs and tick, dashboard sign-in.
-3. **Messaging + conversations:** Meta webhook and sender, the inbound pipeline, the flow engine, locales, and a `RecordingSender` test harness.
+3. ✅ **Messaging + conversations** (done 2026-10-10): Meta webhook and sender, message log, encrypted credentials, inbound pipeline with safety-net job, flow engine, router, global commands, TOML locales, `ConversationHarness` for flow tests, `cli simulate`.
 4. **Appointments domain + use cases:** doctors and availability, reservations, booking and the approval queue, reschedule and cancel, cases, history.
 5. **Bot rules and flows:** R1–R11, plus flow tests for every PRD acceptance criterion.
 6. **Dashboard:** auth, requests queue, appointments list, detail and timeline, settings, inbox and handover.

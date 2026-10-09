@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import os
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 import httpx
 import pytest
@@ -29,6 +30,7 @@ from app.platform.tenancy.wiring import build_facade
 from app.shared.kernel.actor import Actor
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.roles import Role
+from app.shared.module import ModuleDefinition
 
 PASSWORD = "integration-password-1"
 CRON_SECRET = "integration-cron-secret"
@@ -99,12 +101,39 @@ class Api:
         return tenant_id
 
 
+ApiFactory = Callable[..., Awaitable[Api]]
+
+
 @pytest.fixture
-async def api() -> AsyncIterator[Api]:
-    url = os.environ["TEST_DATABASE_URL"]
-    settings = Settings(environment="test", database_url=url, cron_secret=SecretStr(CRON_SECRET))
-    app = create_app(settings)
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield Api(app, client)
-    await app.state.container.engine.dispose()
+async def make_api() -> AsyncIterator[ApiFactory]:
+    """Build an Api with extra feature modules / settings: `await make_api(modules=[...])`."""
+    apps: list[FastAPI] = []
+    clients: list[httpx.AsyncClient] = []
+
+    async def factory(
+        modules: Sequence[ModuleDefinition] | None = None, **settings_overrides: Any
+    ) -> Api:
+        settings = Settings(
+            environment="test",
+            database_url=os.environ["TEST_DATABASE_URL"],
+            cron_secret=SecretStr(CRON_SECRET),
+            **settings_overrides,
+        )
+        app = create_app(settings, modules)
+        client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        )
+        apps.append(app)
+        clients.append(client)
+        return Api(app, client)
+
+    yield factory
+    for client in clients:
+        await client.aclose()
+    for app in apps:
+        await app.state.container.engine.dispose()
+
+
+@pytest.fixture
+async def api(make_api: ApiFactory) -> Api:
+    return await make_api()

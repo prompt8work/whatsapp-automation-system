@@ -9,11 +9,21 @@ from __future__ import annotations
 
 from app.platform.audit.module import module as audit
 from app.platform.contacts.module import module as contacts
+from app.platform.conversations.module import module as conversations
 from app.platform.identity.module import module as identity
 from app.platform.jobs.module import module as jobs
+from app.platform.messaging.module import module as messaging
 from app.platform.tenancy.module import module as tenancy
 from app.shared.module import ModuleDefinition
 
-PLATFORM_MODULES: list[ModuleDefinition] = [identity, tenancy, contacts, audit, jobs]
+PLATFORM_MODULES: list[ModuleDefinition] = [
+    identity,
+    tenancy,
+    contacts,
+    audit,
+    jobs,
+    messaging,
+    conversations,
+]
 
 INSTALLED_MODULES: list[ModuleDefinition] = []

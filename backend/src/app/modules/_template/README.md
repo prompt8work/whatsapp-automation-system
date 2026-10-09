@@ -1,18 +1,20 @@
 # `_template`: copy this to start a new module
 
-A small working module ("Item": create, rename, get) that shows the pattern every module follows.
+A small working module ("Item": create, rename, get; plus a WhatsApp flow: say "item" → consent → name → created) that shows the pattern every module follows.
 It is **not installed**, so it has no routes in the running app and no migration.
 
 ```
 _template/
 ├── module.py          what the module plugs into the platform (ModuleDefinition)
-├── wiring.py          picks concrete classes: SQL Unit of Work → use cases → routers
+├── wiring.py          picks concrete classes: SQL Unit of Work → use cases → routers, flows
 ├── contracts.py       the ONLY file other modules may import
 ├── domain/            rules: aggregate, events, errors, repository Protocols   (no frameworks)
 ├── application/       use cases: commands/, queries/, dto.py, unit_of_work.py    (no frameworks)
 ├── infrastructure/    tables.py, mappers.py, repositories.py, unit_of_work.py   (SQLAlchemy)
 ├── presentation/http/ schemas.py, routers.py                                    (FastAPI)
-└── tests/             fakes.py + domain / use-case / HTTP tests                 (no database)
+├── presentation/whatsapp/ rules.py (when a flow starts), steps.py (one question each)
+├── locales/en.toml    every bot sentence of this module
+└── tests/             fakes.py + domain / use-case / HTTP / WhatsApp-flow tests  (no database)
 ```
 
 ## Create a new module (cookbook §11.7)

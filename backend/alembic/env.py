@@ -18,8 +18,10 @@ from sqlalchemy.pool import NullPool
 # Feature modules: add a line when installing one (cookbook §11.7).
 import app.platform.audit.infrastructure.tables
 import app.platform.contacts.infrastructure.tables
+import app.platform.conversations.infrastructure.tables
 import app.platform.identity.infrastructure.tables
 import app.platform.jobs.infrastructure.tables
+import app.platform.messaging.infrastructure.tables
 import app.platform.tenancy.infrastructure.tables  # noqa: F401
 from app.bootstrap.settings import get_settings
 from app.shared.infrastructure.tables import metadata

@@ -1,0 +1,18 @@
+# Platform bot sentences (English). Keys are used as ctx.t("conversations.<key>").
+# Other languages: add hi.toml etc. with the same keys (PRD OQ-7).
+
+[conversations]
+fallback = "Thanks for your message! Someone from our team will reply here soon."
+unsupported = "Sorry, I can only read text messages and button replies. Please type your answer."
+too_many_attempts = "Sorry, I couldn't understand that. I've asked our team to help you here."
+try_again = "Sorry, that didn't work. Let's try again."
+opted_out = "Done - you won't receive reminders or updates from us. Reply START to turn them back on."
+opted_in = "Welcome back! You'll receive reminders and updates again."
+agent_requested = "Okay, someone from our team will reply here shortly."
+
+[conversations.consent]
+ask = "To help you, we save your name, phone number and booking details. Is that okay?"
+yes = "Yes, continue"
+no = "No thanks"
+declined = "No problem. Message us any time if you change your mind."
+retry = "Please tap \"Yes, continue\" or \"No thanks\"."

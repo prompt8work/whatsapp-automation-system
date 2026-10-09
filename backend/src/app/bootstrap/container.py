@@ -1,7 +1,7 @@
 """Composition root (ADR-002): build every concrete adapter ONCE, by hand, no DI framework.
 
-To swap an implementation (e.g. a fake WhatsApp sender locally) change it HERE -
-use cases only see Protocols and never notice.
+To swap an implementation (e.g. the WhatsApp gateway) change it HERE - use cases only see
+Protocols and never notice.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.bootstrap.settings import Settings
@@ -18,6 +19,16 @@ from app.platform.identity.infrastructure.passwords import Argon2PasswordHasher
 from app.platform.identity.infrastructure.tokens import JwtAccessTokens
 from app.platform.jobs.application.registry import EventHandlerRegistry, JobHandlerRegistry
 from app.platform.jobs.infrastructure.scheduler import SqlJobScheduler
+from app.platform.messaging.application.commands.send_message import RETRY_JOB
+from app.platform.messaging.application.ports import WhatsAppGateway
+from app.platform.messaging.domain.repositories import CredentialStore
+from app.platform.messaging.infrastructure.meta import MetaCloudGateway
+from app.platform.messaging.infrastructure.recording import RecordingGateway
+from app.platform.messaging.infrastructure.repositories import (
+    LocalCredentialStore,
+    SqlCredentialStore,
+)
+from app.platform.messaging.wiring import TenantMessenger
 from app.shared.application.audit import AuditLogger
 from app.shared.application.jobs import JobScheduler
 from app.shared.application.permissions import PermissionRegistry
@@ -38,11 +49,25 @@ class Container:
     session_factory: async_sessionmaker[AsyncSession]
     audit: AuditLogger
     jobs: JobScheduler
+    messenger: TenantMessenger
+    whatsapp_gateway: WhatsAppGateway
+    credentials: CredentialStore
     permissions: PermissionRegistry
     password_hasher: Argon2PasswordHasher
     access_tokens: JwtAccessTokens
     job_handlers: JobHandlerRegistry
     event_handlers: EventHandlerRegistry
+
+
+def _whatsapp(
+    settings: Settings, session_factory: async_sessionmaker[AsyncSession]
+) -> tuple[WhatsAppGateway, CredentialStore]:
+    if settings.whatsapp_sender == "meta":
+        return (
+            MetaCloudGateway(httpx.AsyncClient(), settings.meta_graph_api_version),
+            SqlCredentialStore(session_factory, settings.credentials_key.get_secret_value()),
+        )
+    return RecordingGateway(), LocalCredentialStore()
 
 
 def build_container(
@@ -51,6 +76,7 @@ def build_container(
     *,
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
+    whatsapp_gateway: WhatsAppGateway | None = None,
 ) -> Container:
     clock = clock or SystemClock()
     ids = ids or Uuid7Generator()
@@ -61,6 +87,11 @@ def build_container(
     for module in modules:
         permissions.register(module.permissions, module.role_grants)
 
+    gateway, credentials = _whatsapp(settings, session_factory)
+    gateway = whatsapp_gateway or gateway
+    jobs = SqlJobScheduler(session_factory, clock, ids)
+    messenger = TenantMessenger(session_factory, gateway, credentials, jobs, clock, ids)
+
     container = Container(
         settings=settings,
         clock=clock,
@@ -68,7 +99,10 @@ def build_container(
         engine=engine,
         session_factory=session_factory,
         audit=SqlAuditLogger(session_factory, clock, ids),
-        jobs=SqlJobScheduler(session_factory, clock, ids),
+        jobs=jobs,
+        messenger=messenger,
+        whatsapp_gateway=gateway,
+        credentials=credentials,
         permissions=permissions,
         password_hasher=Argon2PasswordHasher(),
         access_tokens=JwtAccessTokens(
@@ -81,7 +115,8 @@ def build_container(
         event_handlers=EventHandlerRegistry(),
     )
 
-    # Handlers need the finished container (they receive PlatformServices).
+    container.job_handlers.register(RETRY_JOB, messenger.retry_handler())
+    # Module handlers need the finished container (they receive PlatformServices).
     for module in modules:
         for job_type, make_job_handler in module.job_handlers.items():
             container.job_handlers.register(job_type, make_job_handler(container))

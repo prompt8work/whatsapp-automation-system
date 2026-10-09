@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     # Shared secret Vercel Cron sends as `Authorization: Bearer <secret>`.
     cron_secret: SecretStr = SecretStr(_LOCAL_CRON_SECRET)
 
+    # WhatsApp (ARCHITECTURE §7). "recording" logs outgoing messages instead of calling Meta -
+    # the default locally and in tests; production uses "meta".
+    whatsapp_sender: Literal["meta", "recording"] = "recording"
+    meta_graph_api_version: str = "v23.0"
+    meta_app_secret: SecretStr = SecretStr("")  # verifies X-Hub-Signature-256 on webhooks
+    meta_verify_token: SecretStr = SecretStr("local-verify-token")  # webhook subscription check
+    # Fernet key that encrypts per-number access tokens at rest. Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    credentials_key: SecretStr = SecretStr("")
+
     # Dashboard origins allowed by CORS (local Vite dev server).
     cors_origins: list[str] = ["http://localhost:5173"]
 
@@ -48,6 +58,12 @@ class Settings(BaseSettings):
                 raise ValueError("Set JWT_SECRET for preview/production")
             if self.cron_secret.get_secret_value() == _LOCAL_CRON_SECRET:
                 raise ValueError("Set CRON_SECRET for preview/production")
+            if self.whatsapp_sender == "meta" and not (
+                self.meta_app_secret.get_secret_value() and self.credentials_key.get_secret_value()
+            ):
+                raise ValueError(
+                    "Set META_APP_SECRET and CREDENTIALS_KEY to use WHATSAPP_SENDER=meta"
+                )
         return self
 
 

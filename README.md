@@ -33,12 +33,24 @@ uv run python -m app.bootstrap.cli add-member --tenant sunrise-clinic --email ad
 # Background jobs: Vercel Cron calls /internal/jobs/tick every minute; locally run it by hand:
 uv run python -m app.bootstrap.cli tick
 
+# Chat with the bot in the terminal (no Meta needed; WHATSAPP_SENDER=recording):
+uv run python -m app.bootstrap.cli connect-whatsapp --tenant sunrise-clinic --phone-number-id 100000000000001 --display-phone "+91 98765 43210"
+uv run python -m app.bootstrap.cli simulate --tenant sunrise-clinic
+
 # 3. Dashboard → http://localhost:5173 (sign in with the admin you just created)
 cd ../frontend
 cp .env.example .env.local
 npm install
 npm run dev
 ```
+
+## Connecting a real WhatsApp number (Meta Cloud API)
+
+1. In the Meta app: Webhooks → callback URL `https://<api-domain>/webhooks/whatsapp`,
+   verify token = `META_VERIFY_TOKEN`; subscribe to the `messages` field.
+2. Set `WHATSAPP_SENDER=meta`, `META_APP_SECRET` (App settings → Basic) and `CREDENTIALS_KEY`.
+3. `cli connect-whatsapp ...` with the number's **phone number ID**, then
+   `cli set-credentials --phone-number-id ...` (the access token is prompted and stored encrypted).
 
 ## Checks (the same ones CI runs)
 
