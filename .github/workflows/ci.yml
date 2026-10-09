@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wa_platform
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wa_platform"
+          --health-interval 5s --health-retries 10
+    env:
+      ENVIRONMENT: test
+      DATABASE_URL: postgresql+psycopg://app_rw:app_rw@localhost:5432/wa_platform
+      DATABASE_MIGRATION_URL: postgresql+psycopg://app_owner:app_owner@localhost:5432/wa_platform
+      TEST_DATABASE_URL: postgresql+psycopg://app_rw:app_rw@localhost:5432/wa_platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --python 3.12 --locked
+      - name: Lint (ruff)
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Types (mypy --strict)
+        run: uv run mypy
+      - name: Architecture rules (import-linter)
+        run: uv run lint-imports
+      - name: Create DB roles
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d wa_platform -f ../infra/postgres/init.sql
+      - name: Migrations
+        run: uv run alembic upgrade head
+      - name: Migrations match the table definitions
+        run: uv run alembic check
+      - name: Tests
+        run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: API types are up to date with the backend
+        run: |
+          (cd ../backend && uv sync --python 3.12 --locked)
+          npm run gen:api
+          git diff --exit-code -- src/shared/api/schema.d.ts openapi.json
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

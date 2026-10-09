@@ -1,0 +1,127 @@
+[project]
+name = "wa-platform-api"
+version = "0.1.0"
+description = "WhatsApp Business Automation Platform - API (modular monolith)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "sqlalchemy[asyncio]>=2.0.32",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "structlog>=24.4",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "import-linter>=2.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app"]
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests", "src/app"]
+addopts = "--import-mode=importlib -q"
+markers = ["db: needs a real PostgreSQL (TEST_DATABASE_URL); skipped otherwise"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "N", "ASYNC", "PT"]
+ignore = ["RUF012"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+packages = ["app"]
+
+# ---------------------------------------------------------------- import-linter
+# These contracts ARE the architecture rules (docs/ARCHITECTURE.md §3).
+# Run: uv run lint-imports
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers inside every module: presentation | infrastructure -> application -> domain"
+type = "layers"
+layers = ["presentation | infrastructure", "application", "domain"]
+containers = [
+    "app.platform.tenancy",
+    "app.platform.identity",
+    "app.platform.contacts",
+    "app.platform.conversations",
+    "app.platform.messaging",
+    "app.platform.inbox",
+    "app.platform.payments",
+    "app.platform.jobs",
+    "app.platform.retention",
+    "app.platform.audit",
+    "app.modules._template",
+    # Add every new feature module here (cookbook §11.7).
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application layers are framework-free"
+type = "forbidden"
+source_modules = [
+    "app.shared.kernel",
+    "app.shared.application",
+    "app.platform.*.domain",
+    "app.platform.*.application",
+    "app.modules.*.domain",
+    "app.modules.*.application",
+]
+forbidden_modules = ["fastapi", "starlette", "sqlalchemy", "pydantic", "httpx", "structlog"]
+
+[[tool.importlinter.contracts]]
+name = "Shared kernel depends on nothing in the app"
+type = "forbidden"
+source_modules = ["app.shared.kernel"]
+forbidden_modules = [
+    "app.shared.application",
+    "app.shared.infrastructure",
+    "app.shared.presentation",
+    "app.platform",
+    "app.modules",
+    "app.bootstrap",
+]
+
+[[tool.importlinter.contracts]]
+name = "Platform core never depends on feature modules"
+type = "forbidden"
+source_modules = ["app.shared", "app.platform"]
+forbidden_modules = ["app.modules", "app.bootstrap"]
+
+[[tool.importlinter.contracts]]
+name = "Only the composition root wires everything together"
+type = "forbidden"
+source_modules = ["app.platform", "app.modules", "app.shared"]
+forbidden_modules = ["app.main"]
