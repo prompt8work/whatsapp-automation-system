@@ -655,6 +655,136 @@
         "title": "ContactResponse",
         "type": "object"
       },
+      "ContactSchema": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_opted_out": {
+            "title": "Is Opted Out",
+            "type": "boolean"
+          },
+          "last_inbound_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Inbound At"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
+          }
+        },
+        "required": [
+          "id",
+          "phone",
+          "profile_name",
+          "last_inbound_at",
+          "is_opted_out"
+        ],
+        "title": "ContactSchema",
+        "type": "object"
+      },
+      "ConversationSchema": {
+        "properties": {
+          "can_send_text": {
+            "title": "Can Send Text",
+            "type": "boolean"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactSchema"
+          },
+          "handover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HandoverSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageSchema"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "window_closes_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Closes At"
+          }
+        },
+        "required": [
+          "contact",
+          "messages",
+          "handover",
+          "can_send_text",
+          "window_closes_at"
+        ],
+        "title": "ConversationSchema",
+        "type": "object"
+      },
+      "ConversationSummarySchema": {
+        "properties": {
+          "awaiting_reply": {
+            "title": "Awaiting Reply",
+            "type": "boolean"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactSchema"
+          },
+          "handover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HandoverSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_message": {
+            "$ref": "#/components/schemas/MessageSchema"
+          }
+        },
+        "required": [
+          "contact",
+          "last_message",
+          "handover",
+          "awaiting_reply"
+        ],
+        "title": "ConversationSummarySchema",
+        "type": "object"
+      },
       "CreateTenantRequest": {
         "properties": {
           "modules": {
@@ -792,6 +922,38 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HandoverSchema": {
+        "properties": {
+          "assigned_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned User Id"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "started_at",
+          "assigned_user_id"
+        ],
+        "title": "HandoverSchema",
         "type": "object"
       },
       "HealthResponse": {
@@ -1092,6 +1254,53 @@
         "title": "MembershipResponse",
         "type": "object"
       },
+      "MessageSchema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "text",
+          "status",
+          "created_at",
+          "error"
+        ],
+        "title": "MessageSchema",
+        "type": "object"
+      },
       "OptOutRequest": {
         "properties": {
           "opted_out": {
@@ -1199,6 +1408,21 @@
           "full_name"
         ],
         "title": "RenamePatientRequest",
+        "type": "object"
+      },
+      "ReplyRequest": {
+        "properties": {
+          "text": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ReplyRequest",
         "type": "object"
       },
       "RescheduleRequest": {
@@ -1749,7 +1973,7 @@
             }
           },
           {
-            "description": "All appointments on this UTC day",
+            "description": "All appointments on this day (clinic's local time)",
             "in": "query",
             "name": "on",
             "required": false,
@@ -1763,7 +1987,7 @@
                   "type": "null"
                 }
               ],
-              "description": "All appointments on this UTC day",
+              "description": "All appointments on this day (clinic's local time)",
               "title": "On"
             }
           },
@@ -3989,6 +4213,314 @@
         "summary": "Readiness",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/inbox": {
+      "get": {
+        "operationId": "list_inbox_api_inbox_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConversationSummarySchema"
+                  },
+                  "title": "Response List Inbox Api Inbox Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Inbox",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
+    "/api/inbox/{contact_id}": {
+      "get": {
+        "operationId": "conversation_api_inbox__contact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Conversation",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
+    "/api/inbox/{contact_id}/handback": {
+      "post": {
+        "operationId": "hand_back_api_inbox__contact_id__handback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hand Back",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
+    "/api/inbox/{contact_id}/reply": {
+      "post": {
+        "operationId": "reply_api_inbox__contact_id__reply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Reply Api Inbox  Contact Id  Reply Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reply",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
+    "/api/inbox/{contact_id}/takeover": {
+      "post": {
+        "operationId": "take_over_api_inbox__contact_id__takeover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoverSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Take Over",
+        "tags": [
+          "inbox"
         ]
       }
     },

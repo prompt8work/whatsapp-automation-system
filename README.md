@@ -38,6 +38,7 @@ uv run python -m app.bootstrap.cli connect-whatsapp --tenant sunrise-clinic --ph
 uv run python -m app.bootstrap.cli simulate --tenant sunrise-clinic
 
 # 3. Dashboard → http://localhost:5173 (sign in with the admin you just created)
+#    API on another port? API_PROXY_TARGET=http://localhost:8010 npm run dev
 cd ../frontend
 cp .env.example .env.local
 npm install

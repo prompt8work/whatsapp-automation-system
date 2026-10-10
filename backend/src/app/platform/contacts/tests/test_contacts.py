@@ -65,6 +65,9 @@ class InMemoryContacts:
             raise ContactNotFoundError()
         return self._snapshot(self.rows[contact_id])
 
+    async def get_many(self, contact_ids: list[UUID]) -> list[Contact]:
+        return [self._snapshot(c) for c in self.rows.values() if c.id in contact_ids]
+
     async def find_by_phone(self, phone: PhoneNumber) -> Contact | None:
         found = next((c for c in self.rows.values() if c.phone == phone), None)
         return self._snapshot(found) if found else None

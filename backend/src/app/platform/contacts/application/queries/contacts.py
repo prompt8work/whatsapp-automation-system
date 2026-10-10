@@ -61,3 +61,33 @@ class GetContact:
             AuditRecord(query.tenant_id, query.actor, "contact.read", "contact", query.contact_id)
         )
         return ContactDTO.from_domain(contact)
+
+
+@dataclass(frozen=True)
+class GetContactsQuery:
+    tenant_id: TenantId
+    actor: Actor
+    contact_ids: list[UUID]
+
+
+class GetContacts:
+    """Several contacts at once (inbox list) - one audit record, not one per contact."""
+
+    def __init__(self, uow: ContactsUnitOfWork, audit: AuditLogger) -> None:
+        self._uow, self._audit = uow, audit
+
+    async def __call__(self, query: GetContactsQuery) -> dict[UUID, ContactDTO]:
+        if not query.contact_ids:
+            return {}
+        async with self._uow as uow:
+            found = await uow.contacts.get_many(query.contact_ids)
+        await self._audit.record(
+            AuditRecord(
+                query.tenant_id,
+                query.actor,
+                "contact.list",
+                "contact",
+                details={"count": len(found)},
+            )
+        )
+        return {c.id: ContactDTO.from_domain(c) for c in found}

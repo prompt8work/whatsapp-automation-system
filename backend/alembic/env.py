@@ -21,6 +21,7 @@ import app.platform.audit.infrastructure.tables
 import app.platform.contacts.infrastructure.tables
 import app.platform.conversations.infrastructure.tables
 import app.platform.identity.infrastructure.tables
+import app.platform.inbox.infrastructure.sql
 import app.platform.jobs.infrastructure.tables
 import app.platform.messaging.infrastructure.tables
 import app.platform.tenancy.infrastructure.tables  # noqa: F401

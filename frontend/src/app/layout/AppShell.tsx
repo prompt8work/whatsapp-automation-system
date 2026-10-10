@@ -1,30 +1,53 @@
 import { NavLink, Outlet } from "react-router";
 
-import { SessionMenu } from "@/features/auth";
+import { SessionMenu, usePermission } from "@/features/auth";
+import { useRequests } from "@/features/requests";
 
-const NAV = [
-  { to: "/system", label: "System status" },
-  // Requests, Appointments, Inbox, Cases, Settings are added as features are built.
-];
+function RequestsLink() {
+  const requests = useRequests();
+  const count = requests.data?.length ?? 0;
+  return (
+    <>
+      Requests
+      {count > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-xs text-white">{count}</span>}
+    </>
+  );
+}
 
 export function AppShell() {
+  const canManageDoctors = usePermission("doctor.manage");
+  const canManageUsers = usePermission("users.manage");
+  const nav = [
+    { to: "/requests", label: <RequestsLink />, show: usePermission("appointment.approve") },
+    { to: "/appointments", label: "Appointments", show: usePermission("appointment.read") },
+    { to: "/inbox", label: "Inbox", show: usePermission("inbox.read") },
+    {
+      to: "/settings",
+      label: "Settings",
+      show: canManageDoctors || canManageUsers,
+    },
+    { to: "/system", label: "System", show: true },
+  ];
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <span className="font-semibold text-brand">Clinic Dashboard</span>
-          <nav className="flex gap-4 text-sm">
-            {NAV.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  isActive ? "font-medium text-slate-900" : "text-slate-500 hover:text-slate-900"
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+          <nav className="flex flex-wrap gap-4 text-sm">
+            {nav
+              .filter((item) => item.show)
+              .map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    isActive ? "font-medium text-slate-900" : "text-slate-500 hover:text-slate-900"
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
           </nav>
           <div className="ml-auto">
             <SessionMenu />

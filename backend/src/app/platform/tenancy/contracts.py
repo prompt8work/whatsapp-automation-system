@@ -45,6 +45,10 @@ class TenancyFacade:
     async def resolve_phone_number_id(self, phone_number_id: str) -> TenantRoute | None:
         return await ResolveTenantByPhoneNumberId(self._uow_for(None))(phone_number_id)
 
+    async def tenant_timezone(self, tenant_id: TenantId) -> str:
+        async with self._uow_for(tenant_id) as uow:
+            return (await uow.tenants.get(tenant_id)).timezone
+
     async def location_timezone(self, tenant_id: TenantId, location_id: UUID) -> str:
         async with self._uow_for(tenant_id) as uow:
             return (await uow.locations.get(location_id)).timezone

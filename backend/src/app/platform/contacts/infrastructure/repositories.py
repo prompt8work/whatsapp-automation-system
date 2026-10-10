@@ -58,6 +58,10 @@ class SqlContactRepository:
             raise ContactNotFoundError()
         return contact
 
+    async def get_many(self, contact_ids: list[UUID]) -> list[Contact]:
+        rows = await self._session.execute(select(contacts).where(contacts.c.id.in_(contact_ids)))
+        return [_contact(r) for r in rows.mappings()]
+
     async def find_by_phone(self, phone: PhoneNumber) -> Contact | None:
         return await self._one(contacts.c.phone_e164 == phone.e164)
 

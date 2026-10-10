@@ -14,6 +14,7 @@ from app.platform.conversations.application.handle_webhook import PROCESS_JOB
 from app.platform.conversations.wiring import Conversations, build_conversations
 from app.platform.identity.application.use_cases import IdentityUseCases
 from app.platform.identity.wiring import build_identity_use_cases
+from app.platform.inbox.wiring import InboxHandoverDesk
 from app.platform.messaging.application.ports import WhatsAppGateway
 from app.platform.tenancy.contracts import TenancyFacade
 from app.platform.tenancy.wiring import build_facade
@@ -62,6 +63,7 @@ def build_platform(
         verify_token=settings.meta_verify_token.get_secret_value(),
         app_secret=settings.meta_app_secret.get_secret_value(),
         require_signature=not settings.is_local,
+        handover=InboxHandoverDesk(container),
     )
     container.job_handlers.register(PROCESS_JOB, conversations.process_job)
     return Platform(container, modules, tenancy, identity, conversations)

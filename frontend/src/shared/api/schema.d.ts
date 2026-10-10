@@ -541,6 +541,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Inbox */
+        get: operations["list_inbox_api_inbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/{contact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conversation */
+        get: operations["conversation_api_inbox__contact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/{contact_id}/handback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hand Back */
+        post: operations["hand_back_api_inbox__contact_id__handback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/{contact_id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply */
+        post: operations["reply_api_inbox__contact_id__reply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/{contact_id}/takeover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take Over */
+        post: operations["take_over_api_inbox__contact_id__takeover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/locations": {
         parameters: {
             query?: never;
@@ -1100,6 +1185,41 @@ export interface components {
             /** Profile Name */
             profile_name: string | null;
         };
+        /** ContactSchema */
+        ContactSchema: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Opted Out */
+            is_opted_out: boolean;
+            /** Last Inbound At */
+            last_inbound_at: string | null;
+            /** Phone */
+            phone: string;
+            /** Profile Name */
+            profile_name: string | null;
+        };
+        /** ConversationSchema */
+        ConversationSchema: {
+            /** Can Send Text */
+            can_send_text: boolean;
+            contact: components["schemas"]["ContactSchema"];
+            handover: components["schemas"]["HandoverSchema"] | null;
+            /** Messages */
+            messages: components["schemas"]["MessageSchema"][];
+            /** Window Closes At */
+            window_closes_at: string | null;
+        };
+        /** ConversationSummarySchema */
+        ConversationSummarySchema: {
+            /** Awaiting Reply */
+            awaiting_reply: boolean;
+            contact: components["schemas"]["ContactSchema"];
+            handover: components["schemas"]["HandoverSchema"] | null;
+            last_message: components["schemas"]["MessageSchema"];
+        };
         /** CreateTenantRequest */
         CreateTenantRequest: {
             /**
@@ -1158,6 +1278,18 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HandoverSchema */
+        HandoverSchema: {
+            /** Assigned User Id */
+            assigned_user_id: string | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
         };
         /** HealthResponse */
         HealthResponse: {
@@ -1278,6 +1410,27 @@ export interface components {
             /** Tenant Name */
             tenant_name: string;
         };
+        /** MessageSchema */
+        MessageSchema: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Direction */
+            direction: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /** Text */
+            text: string;
+        };
         /** OptOutRequest */
         OptOutRequest: {
             /** Opted Out */
@@ -1328,6 +1481,11 @@ export interface components {
         RenamePatientRequest: {
             /** Full Name */
             full_name: string;
+        };
+        /** ReplyRequest */
+        ReplyRequest: {
+            /** Text */
+            text: string;
         };
         /** RescheduleRequest */
         RescheduleRequest: {
@@ -1547,7 +1705,7 @@ export interface operations {
             query?: {
                 start_from?: string | null;
                 start_to?: string | null;
-                /** @description All appointments on this UTC day */
+                /** @description All appointments on this day (clinic's local time) */
                 on?: string | null;
                 doctor_id?: string | null;
                 patient_id?: string | null;
@@ -2737,6 +2895,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    list_inbox_api_inbox_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummarySchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    conversation_api_inbox__contact_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hand_back_api_inbox__contact_id__handback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reply_api_inbox__contact_id__reply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_over_api_inbox__contact_id__takeover_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

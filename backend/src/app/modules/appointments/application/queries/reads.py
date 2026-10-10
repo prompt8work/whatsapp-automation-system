@@ -6,6 +6,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.modules.appointments.application.dto import (
     AppointmentDetailDTO,
@@ -78,6 +79,8 @@ class FindFreeSlots:
 
 @dataclass(frozen=True)
 class ListAppointmentsQuery:
+    tenant_id: TenantId
+    on: date | None = None  # a day in the CLINIC's timezone (overrides start_from/start_to)
     start_from: datetime | None = None
     start_to: datetime | None = None
     doctor_id: UUID | None = None
@@ -90,10 +93,15 @@ class ListAppointmentsQuery:
 class ListAppointments:
     """Doctors with only `appointment.read` see their own appointments (PRD AP-7.2)."""
 
-    def __init__(self, uow: AppointmentsUnitOfWork) -> None:
-        self._uow = uow
+    def __init__(self, uow: AppointmentsUnitOfWork, clinic: ClinicDirectory) -> None:
+        self._uow, self._clinic = uow, clinic
 
     async def __call__(self, query: ListAppointmentsQuery) -> list[AppointmentDTO]:
+        start_from, start_to = query.start_from, query.start_to
+        if query.on is not None:  # local midnight to midnight, as UTC instants
+            tz = ZoneInfo(await self._clinic.tenant_timezone(query.tenant_id))
+            start_from = datetime.combine(query.on, time(), tz).astimezone(UTC)
+            start_to = datetime.combine(query.on + timedelta(days=1), time(), tz).astimezone(UTC)
         async with self._uow as uow:
             doctor_id = query.doctor_id
             if query.only_for_user is not None:
@@ -103,8 +111,8 @@ class ListAppointments:
                 doctor_id = own.id
             found = await uow.appointments.search(
                 AppointmentFilter(
-                    start_from=query.start_from,
-                    start_to=query.start_to,
+                    start_from=start_from,
+                    start_to=start_to,
                     doctor_id=doctor_id,
                     patient_id=query.patient_id,
                     statuses=query.statuses,

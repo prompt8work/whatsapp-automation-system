@@ -349,3 +349,39 @@ async def test_history_is_append_only(api: Api) -> None:
         ) == (1,)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             await conn.execute("DELETE FROM appointment_events")
+
+
+async def test_day_list_uses_the_clinics_local_day(api: Api) -> None:
+    """00:15 IST on day D is 18:45 UTC on D-1: it must be listed under D, not D-1."""
+    c = await open_clinic(api)
+    night_doctor = await c.post(
+        "/api/doctors",
+        {
+            "location_id": c.location_id,
+            "name": "Dr Night",
+            "specialty": "General",
+            "slot_minutes": 15,
+        },
+        expect=201,
+    )
+    hours = [{"weekday": d, "start": "00:00", "end": "02:00"} for d in range(7)]
+    await api.client.put(
+        f"/api/doctors/{night_doctor['id']}/working-hours", json=hours, headers=c.admin
+    )
+    day = tomorrow()
+    first = (await c.slots(night_doctor["id"]))[1]  # 00:15 IST
+    booked = await c.post(
+        "/api/appointments",
+        {
+            "patient_id": await c.patient(),
+            "doctor_id": night_doctor["id"],
+            "start": first,
+            "reason": "Fever",
+        },
+        expect=201,
+    )
+
+    on_local_day = await c.get("/api/appointments", on=day.isoformat())
+    on_previous_day = await c.get("/api/appointments", on=(day - timedelta(days=1)).isoformat())
+    assert booked["id"] in [a["id"] for a in on_local_day]
+    assert booked["id"] not in [a["id"] for a in on_previous_day]

@@ -12,6 +12,7 @@ from app.platform.audit.module import module as audit
 from app.platform.contacts.module import module as contacts
 from app.platform.conversations.module import module as conversations
 from app.platform.identity.module import module as identity
+from app.platform.inbox.module import module as inbox
 from app.platform.jobs.module import module as jobs
 from app.platform.messaging.module import module as messaging
 from app.platform.tenancy.module import module as tenancy
@@ -25,6 +26,7 @@ PLATFORM_MODULES: list[ModuleDefinition] = [
     jobs,
     messaging,
     conversations,
+    inbox,
 ]
 
 INSTALLED_MODULES: list[ModuleDefinition] = [appointments]

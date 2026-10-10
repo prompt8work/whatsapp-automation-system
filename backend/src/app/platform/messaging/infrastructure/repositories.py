@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from cryptography.fernet import Fernet
 from sqlalchemy import RowMapping, func, select, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.platform.messaging.application.queries.messages import MessageView
 from app.platform.messaging.domain.message import Direction, Message, MessageStatus
 from app.platform.messaging.infrastructure.tables import messages, whatsapp_credentials
 from app.shared.application.unit_of_work import UnitOfWork
+from app.shared.infrastructure.unit_of_work import SqlUnitOfWork
 from app.shared.kernel.errors import NotFoundError
 from app.shared.kernel.ids import TenantId
 
@@ -139,3 +142,59 @@ class LocalCredentialStore:
 
     async def put(self, phone_number_id: str, access_token: str) -> None:
         return None
+
+
+class SqlMessageReadModel:
+    """Read side of the message log (inbox). Opens its own tenant-scoped transaction."""
+
+    def __init__(
+        self, session_factory: async_sessionmaker[AsyncSession], tenant_id: TenantId
+    ) -> None:
+        self._session_factory, self._tenant_id = session_factory, tenant_id
+
+    @staticmethod
+    def _view(r: RowMapping) -> MessageView:
+        return MessageView(
+            id=r["id"],
+            contact_id=r["contact_id"],
+            direction=r["direction"],
+            text=str((r["content"] or {}).get("text", "")),
+            status=r["status"],
+            created_at=r["created_at"],
+            error=r["error"],
+        )
+
+    async def latest_per_contact(self, limit: int) -> list[MessageView]:
+        newest = (
+            select(messages)
+            .ext(distinct_on(messages.c.contact_id))
+            .order_by(messages.c.contact_id, messages.c.created_at.desc())
+            .subquery()
+        )
+        stmt = select(newest).order_by(newest.c.created_at.desc()).limit(limit)
+        async with SqlUnitOfWork(self._session_factory, self._tenant_id) as uow:
+            rows = (await uow.session.execute(stmt)).mappings().all()
+        return [self._view(r) for r in rows]
+
+    async def thread(self, contact_id: UUID, limit: int) -> list[MessageView]:
+        stmt = (
+            select(messages)
+            .where(messages.c.contact_id == contact_id)
+            .order_by(messages.c.created_at.desc())
+            .limit(limit)
+        )
+        async with SqlUnitOfWork(self._session_factory, self._tenant_id) as uow:
+            rows = (await uow.session.execute(stmt)).mappings().all()
+        return [self._view(r) for r in reversed(rows)]
+
+    async def last_inbound_at(self, contact_ids: list[UUID]) -> dict[UUID, datetime]:
+        if not contact_ids:
+            return {}
+        stmt = (
+            select(messages.c.contact_id, func.max(messages.c.created_at).label("at"))
+            .where(messages.c.contact_id.in_(contact_ids), messages.c.direction == "inbound")
+            .group_by(messages.c.contact_id)
+        )
+        async with SqlUnitOfWork(self._session_factory, self._tenant_id) as uow:
+            rows = await uow.session.execute(stmt)
+            return {r.contact_id: r.at for r in rows}

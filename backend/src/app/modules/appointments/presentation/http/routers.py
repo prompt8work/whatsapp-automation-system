@@ -8,7 +8,7 @@ Static paths (/appointments/requests, /appointments/settings) are declared befor
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime, time
+from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -265,17 +265,18 @@ def build_router(
         ctx: CanRead,
         start_from: AwareDatetimeQuery = None,
         start_to: AwareDatetimeQuery = None,
-        on: Annotated[date | None, Query(description="All appointments on this UTC day")] = None,
+        on: Annotated[
+            date | None, Query(description="All appointments on this day (clinic's local time)")
+        ] = None,
         doctor_id: UUID | None = None,
         patient_id: UUID | None = None,
         status_in: Annotated[list[AppointmentStatus] | None, Query(alias="status")] = None,
         limit: Annotated[int, Query(ge=1, le=500)] = 200,
     ) -> list[AppointmentResponse]:
-        if on is not None:
-            start_from = datetime.combine(on, time(), UTC)
-            start_to = datetime.combine(on, time.max, UTC)
         found = await for_tenant(ctx.tenant_id).list_appointments(
             ListAppointmentsQuery(
+                tenant_id=ctx.tenant_id,
+                on=on,
                 start_from=start_from,
                 start_to=start_to,
                 doctor_id=doctor_id,

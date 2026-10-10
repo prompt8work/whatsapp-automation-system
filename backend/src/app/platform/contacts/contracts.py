@@ -12,7 +12,11 @@ from app.platform.contacts.application.commands.resolve_contact import (
     ResolveContactCommand,
 )
 from app.platform.contacts.application.dto import ContactDTO, ResolvedContact
-from app.platform.contacts.application.queries.contacts import GetContactQuery, SearchContactsQuery
+from app.platform.contacts.application.queries.contacts import (
+    GetContactQuery,
+    GetContactsQuery,
+    SearchContactsQuery,
+)
 from app.platform.contacts.application.use_cases import ContactsUseCases
 
 __all__ = [
@@ -20,6 +24,7 @@ __all__ = [
     "ContactsUseCases",
     "EnsureContactCommand",
     "GetContactQuery",
+    "GetContactsQuery",
     "GrantConsentCommand",
     "ResolveContactCommand",
     "ResolvedContact",

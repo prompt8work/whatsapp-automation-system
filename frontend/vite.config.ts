@@ -12,7 +12,8 @@ export default defineConfig({
   },
   server: {
     // Local dev: same-origin /api like production (where Vercel rewrites /api to the backend).
-    proxy: { "/api": "http://localhost:8000" },
+    // API_PROXY_TARGET=http://localhost:8010 npm run dev   if port 8000 is busy.
+    proxy: { "/api": process.env.API_PROXY_TARGET ?? "http://localhost:8000" },
   },
   test: {
     environment: "jsdom",

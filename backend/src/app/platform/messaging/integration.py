@@ -3,7 +3,23 @@
 
 from __future__ import annotations
 
+from app.platform.messaging.application.queries.messages import (
+    GetThread,
+    ListConversations,
+    MessageView,
+)
+from app.platform.messaging.infrastructure.repositories import SqlMessageReadModel
 from app.platform.messaging.infrastructure.webhook import parse_webhook, sign, verify_signature
 from app.platform.messaging.wiring import InboundUseCases, inbound_use_cases
 
-__all__ = ["InboundUseCases", "inbound_use_cases", "parse_webhook", "sign", "verify_signature"]
+__all__ = [
+    "GetThread",
+    "InboundUseCases",
+    "ListConversations",
+    "MessageView",
+    "SqlMessageReadModel",
+    "inbound_use_cases",
+    "parse_webhook",
+    "sign",
+    "verify_signature",
+]

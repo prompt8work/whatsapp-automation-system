@@ -673,6 +673,6 @@ Short ADRs live in `docs/adr/NNN-title.md`. These are the first ones:
    | R9 opted out | platform STOP/START; the menu reminds the person how to turn reminders back on |
    | R11 not a greeting | rules ignore the text, so any first message routes like a greeting |
 
-6. **Dashboard:** auth, requests queue, appointments list, detail and timeline, settings, inbox and handover.
+6. ✅ **Dashboard** (done 2026-10-11): requests queue, appointments by clinic-local day, detail with history and actions, settings (doctors & hours, locations, booking rules, users), staff inbox with take over / reply / hand back (real `HandoverDesk` in `platform/inbox`).
 7. **Retention and deletion:** purgers, the daily job, the `DELETE MY DATA` flow, and the cases UI.
 8. **Phase 2:** payments (WhatsApp Payments, Razorpay links, Pay at clinic, Mark as paid/refunded), reminder templates with buttons, `LlmParser`, push real-time updates.

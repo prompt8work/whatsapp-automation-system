@@ -105,6 +105,9 @@ class ClinicAdapter:
     async def settings(self, tenant_id: TenantId) -> dict[str, Any]:
         return await tenancy_for(self.services).module_settings(tenant_id, MODULE_KEY)
 
+    async def tenant_timezone(self, tenant_id: TenantId) -> str:
+        return await tenancy_for(self.services).tenant_timezone(tenant_id)
+
     async def location_names(self, tenant_id: TenantId) -> dict[UUID, str]:
         return await tenancy_for(self.services).location_names(tenant_id)
 
@@ -162,7 +165,7 @@ def use_cases_for(services: PlatformServices, tenant_id: TenantId) -> Appointmen
         cancel=CancelAppointment(uow, clinic, clock),
         record_attendance=RecordAttendance(uow, clock),
         update_details=UpdateAppointmentDetails(uow, clinic, clock),
-        list_appointments=ListAppointments(uow),
+        list_appointments=ListAppointments(uow, clinic),
         list_requests=ListRequests(uow),
         detail=GetAppointmentDetail(uow, contacts),
         upcoming_for_contact=UpcomingForContact(uow),
