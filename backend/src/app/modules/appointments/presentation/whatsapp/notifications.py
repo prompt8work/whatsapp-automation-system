@@ -18,6 +18,7 @@ from uuid import UUID
 
 from app.modules.appointments.application.ports import ClinicDirectory
 from app.modules.appointments.application.unit_of_work import AppointmentsUnitOfWork
+from app.modules.appointments.domain.errors import AppointmentNotFoundError
 from app.modules.appointments.presentation.whatsapp.formatting import when
 from app.shared.application.conversation import Translator
 from app.shared.application.events import StoredEvent
@@ -63,7 +64,10 @@ class NotifyPatient:
             return  # auto-confirmed bookings were confirmed in the chat already
 
         async with self._uow_for(event.tenant_id) as uow:
-            appointment = await uow.appointments.get(UUID(event.payload["appointment_id"]))
+            try:
+                appointment = await uow.appointments.get(UUID(event.payload["appointment_id"]))
+            except AppointmentNotFoundError:
+                return  # deleted since (on request / retention) - nothing left to talk about
             doctor = await uow.doctors.get(appointment.doctor_id)
         timezone = await self._clinic.timezone(event.tenant_id, appointment.location_id)
         text = self._texts.t(
@@ -78,3 +82,24 @@ class NotifyPatient:
                 "notification.skipped",
                 extra={"event": event.event_type, "appointment": str(appointment.id)},
             )
+
+
+#: Deletion requests (AP-10.10, AP-10.11): event type -> text key.
+DELETION_NOTICES: dict[str, str] = {
+    "DeletionRequestCompleted": "appointments.delete.completed",
+    "DeletionRequestRejected": "appointments.delete.rejected",
+}
+
+
+class NotifyDeletionDecision:
+    def __init__(self, notifier: PatientNotifier, texts: Translator) -> None:
+        self._notifier, self._texts = notifier, texts
+
+    async def __call__(self, event: StoredEvent) -> None:
+        key = DELETION_NOTICES.get(event.event_type)
+        if key is None or event.tenant_id is None:
+            return
+        text = self._texts.t(key, reason=event.payload.get("reason", "")).strip()
+        contact_id = UUID(event.payload["contact_id"])
+        if not await self._notifier.notify(event.tenant_id, contact_id, text):
+            log.info("notification.skipped", extra={"event": event.event_type})

@@ -45,3 +45,10 @@ export function relative(iso: string, now: Date = new Date()): string {
   if (hours < 24) return `${hours} h ago`;
   return `${Math.round(hours / 24)} d ago`;
 }
+
+/** "12 Dec 2026" in `timeZone` - for dates far enough away that the time doesn't matter. */
+export function formatDate(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-IN", { timeZone, day: "numeric", month: "short", year: "numeric" }).format(
+    new Date(iso),
+  );
+}

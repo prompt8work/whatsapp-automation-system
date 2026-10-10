@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
+import { usePermission } from "@/features/auth";
 import { useTimezone } from "@/features/clinic";
 import { addDays, formatWhen, localDate } from "@/shared/lib/time";
 import { Button } from "@/shared/ui/Button";
@@ -9,7 +10,8 @@ import { Input } from "@/shared/ui/Field";
 import { ErrorText, Loading } from "@/shared/ui/Feedback";
 import { PageHeader } from "@/shared/ui/PageHeader";
 
-import { useAppointment, useAppointmentAction, useSlots } from "../api/appointments";
+import { useAppointment, useAppointmentAction, useCaseAction, usePatientCases, useSlots } from "../api/appointments";
+import { CaseCard } from "../components/CaseCard";
 import { HistoryTimeline } from "../components/HistoryTimeline";
 import { SlotPicker } from "../components/SlotPicker";
 import { StatusBadge } from "../components/StatusBadge";
@@ -21,10 +23,14 @@ export function AppointmentDetailPage() {
   const timeZone = useTimezone();
   const detail = useAppointment(appointmentId);
   const act = useAppointmentAction(appointmentId);
+  const canManageCases = usePermission("case.manage");
   const [moving, setMoving] = useState(false);
   const [moveDay, setMoveDay] = useState(addDays(localDate(new Date(), timeZone), 1));
   const a = detail.data?.appointment;
   const slots = useSlots(moving && a ? a.slot.doctor_id : "", moveDay);
+  const cases = usePatientCases(a?.patient_id ?? "");
+  const caseAction = useCaseAction(a?.case_id ?? "");
+  const theCase = cases.data?.find((c) => c.id === a?.case_id);
 
   if (detail.isLoading) return <Loading />;
   if (!detail.data || !a) return <ErrorText error={detail.error ?? new Error("Not found")} />;
@@ -40,7 +46,7 @@ export function AppointmentDetailPage() {
       <PageHeader title={`${a.patient_name} · ${a.reference}`}>
         <StatusBadge status={a.status} />
       </PageHeader>
-      <ErrorText error={act.error} />
+      <ErrorText error={act.error ?? caseAction.error} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
@@ -130,9 +136,22 @@ export function AppointmentDetailPage() {
           )}
         </div>
 
-        <Card title="History">
-          <HistoryTimeline entries={detail.data.history} timeZone={timeZone} />
-        </Card>
+        <div className="space-y-4">
+          {theCase && (
+            <Card title="Case">
+              <CaseCard
+                case={theCase}
+                timeZone={timeZone}
+                canManage={canManageCases}
+                busy={caseAction.isPending}
+                onAction={(action) => caseAction.mutate(action)}
+              />
+            </Card>
+          )}
+          <Card title="History">
+            <HistoryTimeline entries={detail.data.history} timeZone={timeZone} />
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ from uuid import UUID
 
 from app.modules.appointments.domain.appointment import Appointment
 from app.modules.appointments.domain.case import Case
+from app.modules.appointments.domain.deletion_request import DeletionRequest, DeletionStatus
 from app.modules.appointments.domain.doctor import Doctor
 from app.modules.appointments.domain.patient import Patient
 from app.modules.appointments.domain.status import AppointmentStatus
@@ -125,3 +126,19 @@ class HistoryEntry:
 
 class AppointmentHistory(Protocol):
     async def for_appointment(self, appointment_id: UUID) -> list[HistoryEntry]: ...
+
+
+class DeletionRequestRepository(Protocol):
+    async def get(self, request_id: UUID) -> DeletionRequest:
+        """Raises DeletionRequestNotFoundError."""
+        ...
+
+    async def pending_for_contact(self, contact_id: UUID) -> DeletionRequest | None: ...
+
+    async def list(self, status: DeletionStatus | None, limit: int) -> list[DeletionRequest]:
+        """Newest first."""
+        ...
+
+    async def add(self, request: DeletionRequest) -> None: ...
+
+    async def save(self, request: DeletionRequest) -> None: ...

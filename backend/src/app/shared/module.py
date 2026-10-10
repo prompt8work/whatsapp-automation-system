@@ -5,8 +5,7 @@ Bootstrap collects them: permissions go to the PermissionRegistry, job/event han
 background runners, routers into the FastAPI app. The platform never imports a feature module
 by name; feature modules are listed only in app/bootstrap/modules.py.
 
-Fields are added as the platform parts they plug into are built (purgers come with retention
-in build step 7).
+Fields are added as the platform parts they plug into are built.
 """
 
 from __future__ import annotations
@@ -24,6 +23,7 @@ from app.shared.application.conversation import Flow, RouterRule
 from app.shared.application.events import EventHandler
 from app.shared.application.jobs import JobHandler, JobScheduler
 from app.shared.application.messaging import Messenger
+from app.shared.application.retention import Purger
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.ids import IdGenerator
 from app.shared.kernel.roles import Role
@@ -50,11 +50,17 @@ class PlatformServices(Protocol):
     @property
     def messenger(self) -> Messenger: ...
 
+    @property
+    def purge_session_factory(self) -> async_sessionmaker[AsyncSession]:
+        """Sessions as the `app_purge` role - ONLY for Purgers (deletes append-only history)."""
+        ...
+
 
 JobHandlerFactory = Callable[[PlatformServices], JobHandler]
 EventHandlerFactory = Callable[[PlatformServices], EventHandler]
 FlowFactory = Callable[[PlatformServices], Flow]
 RouterRuleFactory = Callable[[PlatformServices], RouterRule]
+PurgerFactory = Callable[[PlatformServices], Purger]
 
 
 def _no_routers(_: PlatformServices) -> Sequence[APIRouter]:
@@ -80,3 +86,7 @@ class ModuleDefinition:
     flows: Sequence[FlowFactory] = ()
     router_rules: Sequence[RouterRuleFactory] = ()
     locales_dir: Path | None = None
+    # Retention (PRD §7.10): what this module deletes when its time has come.
+    purgers: Sequence[PurgerFactory] = ()
+    # Jobs that run once a day: job_type -> UTC hour. The cron tick schedules them.
+    daily_jobs: Mapping[str, int] = field(default_factory=dict)

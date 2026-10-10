@@ -149,3 +149,22 @@ slot_reservations = Table(
         postgresql_where=text("active"),
     ),
 )
+
+# Ids only - no names or reasons (PRD AP-10.13). No foreign key to contacts on purpose: a
+# finished request must not keep the contact alive (retention RT-4).
+deletion_requests = Table(
+    "deletion_requests",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column("tenant_id", Uuid, nullable=False),
+    Column("contact_id", Uuid, nullable=False),
+    Column("patient_ids", JSONB, nullable=False),
+    Column("status", String(10), nullable=False),
+    Column("requested_at", TS, nullable=False),
+    Column("decided_at", TS, nullable=True),
+    Column("decided_by", Uuid, nullable=True),
+    Column("rejection_reason", Text, nullable=False),
+    Column("deleted_counts", JSONB, nullable=False),
+    Column("version", Integer, nullable=False),
+    Index("ix_deletion_requests_status", "tenant_id", "status", "requested_at"),
+)

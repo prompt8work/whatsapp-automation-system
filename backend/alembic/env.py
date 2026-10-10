@@ -24,6 +24,7 @@ import app.platform.identity.infrastructure.tables
 import app.platform.inbox.infrastructure.sql
 import app.platform.jobs.infrastructure.tables
 import app.platform.messaging.infrastructure.tables
+import app.platform.retention.infrastructure.tables
 import app.platform.tenancy.infrastructure.tables  # noqa: F401
 from app.bootstrap.settings import get_settings
 from app.shared.infrastructure.tables import metadata

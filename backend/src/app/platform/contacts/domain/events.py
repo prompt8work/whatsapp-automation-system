@@ -30,3 +30,10 @@ class ContactOptedOut(DomainEvent):
 class ContactOptedIn(DomainEvent):
     contact_id: UUID
     actor: Actor
+
+
+@dataclass(frozen=True, kw_only=True)
+class ContactForgotten(DomainEvent):
+    """The contact was deleted (retention RT-4). Every module deletes its rows for it."""
+
+    contact_id: UUID

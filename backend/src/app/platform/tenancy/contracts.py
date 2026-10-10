@@ -2,6 +2,7 @@
 tenancy's wiring with a Unit-of-Work factory, used through these methods only.
 
 - names(ids)                      tenant display names (identity's TenantDirectory port)
+- all_tenant_ids()                every tenant, suspended ones too (the retention job)
 - resolve_phone_number_id(id)     webhook routing (conversation pipeline)
 - location_timezone(tenant, id)   a location's timezone (slot times are local wall-clock)
 - location_names(tenant)          active locations (the bot's "which branch?" question)
@@ -41,6 +42,10 @@ class TenancyFacade:
 
     async def names(self, tenant_ids: Collection[TenantId]) -> dict[TenantId, str]:
         return await TenantNames(self._uow_for(None)).names(tenant_ids)
+
+    async def all_tenant_ids(self) -> list[TenantId]:
+        async with self._uow_for(None) as uow:
+            return [TenantId(t.id) for t in await uow.tenants.list_all()]
 
     async def resolve_phone_number_id(self, phone_number_id: str) -> TenantRoute | None:
         return await ResolveTenantByPhoneNumberId(self._uow_for(None))(phone_number_id)

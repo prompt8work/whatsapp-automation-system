@@ -1,6 +1,6 @@
 """The inbound pipeline for ONE message (PRD PL-3.2, ARCHITECTURE §7.1):
 
-    lock session -> staff handover? -> global command? -> continue flow | route new conversation
+    lock session -> staff handover? -> global command / flow keyword? -> continue flow | route
 
 Replies are collected in ctx.outbox and sent AFTER the session is committed, so a crash can
 never leave the person with an answer the system does not remember giving.
@@ -106,6 +106,9 @@ class HandleInboundMessage:
         elif word in MENU_WORDS:
             session.finish(ctx.now)
             await self._route(ctx, session)
+        elif flow_key := self._engine.keyword_flow(ctx):  # e.g. "delete my data" (AP-10.8)
+            session.finish(ctx.now)
+            await self._engine.start(ctx, session, flow_key)
         elif word in AGENT_WORDS:
             session.finish(ctx.now)
             ctx.say(ctx.t("conversations.agent_requested"))

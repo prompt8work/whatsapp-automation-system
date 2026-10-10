@@ -75,6 +75,7 @@ def test_every_bot_text_key_used_in_code_exists() -> None:
         "appointments.menu",
         "appointments.reschedule",
         "appointments.cancel",
+        "appointments.delete_data",
     }  # flow keys
     missing = sorted(k for k in keys if not texts.has(k))
     assert missing == []

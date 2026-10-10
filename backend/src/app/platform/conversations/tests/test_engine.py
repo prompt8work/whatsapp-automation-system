@@ -194,3 +194,19 @@ async def test_declining_consent_ends_the_flow() -> None:
     [reply] = await chat.tap(2)
     assert "change your mind" in reply
     assert not chat.contact.has_consent
+
+
+async def test_flow_keyword_starts_its_flow_even_mid_flow() -> None:  # e.g. "DELETE MY DATA"
+    chat = harness()
+    chat.add_flow(Flow("demo.forget", "demo", (Bye(),), keywords=frozenset({"forget me"})))
+    await chat.send("hi")
+    assert await chat.send("Forget me!") == ["Other flow here."]
+    assert chat.session is not None
+    assert chat.session.flow_key == "demo.forget"
+
+
+async def test_flow_keywords_of_disabled_modules_are_ignored() -> None:
+    chat = harness(modules=set())
+    chat.add_flow(Flow("demo.forget", "demo", (Bye(),), keywords=frozenset({"forget me"})))
+    [reply] = await chat.send("forget me")
+    assert "Someone from our team will reply" in reply

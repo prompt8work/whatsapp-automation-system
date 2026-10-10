@@ -206,12 +206,14 @@ class UpcomingForContact:
 
 
 class CasesOfPatient:
-    def __init__(self, uow: AppointmentsUnitOfWork) -> None:
-        self._uow = uow
+    def __init__(self, uow: AppointmentsUnitOfWork, clinic: ClinicDirectory) -> None:
+        self._uow, self._clinic = uow, clinic
 
-    async def __call__(self, patient_id: UUID) -> list[CaseDTO]:
+    async def __call__(self, tenant_id: TenantId, patient_id: UUID) -> list[CaseDTO]:
+        policy = BookingPolicy.from_settings(await self._clinic.settings(tenant_id))
         async with self._uow as uow:
             cases = await uow.cases.for_patient(patient_id)
         return [
-            CaseDTO.from_domain(c) for c in sorted(cases, key=lambda c: c.opened_at, reverse=True)
+            CaseDTO.from_domain(c, policy)
+            for c in sorted(cases, key=lambda c: c.opened_at, reverse=True)
         ]

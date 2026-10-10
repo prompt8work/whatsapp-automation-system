@@ -11,6 +11,7 @@ from app.modules.appointments.infrastructure.repositories import (
     SqlAppointmentHistory,
     SqlAppointmentRepository,
     SqlCaseRepository,
+    SqlDeletionRequestRepository,
     SqlDoctorRepository,
     SqlPatientRepository,
     SqlSlotReservations,
@@ -29,6 +30,7 @@ class SqlAppointmentsUnitOfWork(SqlUnitOfWork):
     appointments: SqlAppointmentRepository
     reservations: SqlSlotReservations
     history: SqlAppointmentHistory
+    deletion_requests: SqlDeletionRequestRepository
 
     def __init__(
         self,
@@ -46,6 +48,7 @@ class SqlAppointmentsUnitOfWork(SqlUnitOfWork):
         self.appointments = SqlAppointmentRepository(self.session, self)
         self.reservations = SqlSlotReservations(self.session, self._tenant, self._ids)
         self.history = SqlAppointmentHistory(self.session)
+        self.deletion_requests = SqlDeletionRequestRepository(self.session, self)
 
     async def _save_events(self, events: list[DomainEvent]) -> None:
         await super()._save_events(events)  # outbox

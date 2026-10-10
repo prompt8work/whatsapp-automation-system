@@ -39,6 +39,7 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
         await container.engine.dispose()
+        await container.purge_engine.dispose()
 
     app = FastAPI(title="WhatsApp Automation Platform API", version=VERSION, lifespan=lifespan)
     app.state.platform = platform
@@ -63,6 +64,7 @@ def create_app(
         build_credentials_router(SetCredentials(container.credentials)), prefix="/api"
     )
     app.include_router(platform.conversations.webhook_router)
+    app.include_router(platform.retention.router, prefix="/api")
     app.include_router(
         build_tick_router(
             container.session_factory,
@@ -70,6 +72,8 @@ def create_app(
             container.job_handlers,
             container.event_handlers,
             settings.cron_secret.get_secret_value(),
+            container.jobs,
+            {job: hour for module in platform.modules for job, hour in module.daily_jobs.items()},
         )
     )
 

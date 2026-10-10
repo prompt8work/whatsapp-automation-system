@@ -47,6 +47,8 @@ class Container:
     ids: IdGenerator
     engine: AsyncEngine
     session_factory: async_sessionmaker[AsyncSession]
+    purge_engine: AsyncEngine
+    purge_session_factory: async_sessionmaker[AsyncSession]
     audit: AuditLogger
     jobs: JobScheduler
     messenger: TenantMessenger
@@ -82,6 +84,7 @@ def build_container(
     ids = ids or Uuid7Generator()
     engine = create_engine(settings.database_url)  # lazy: connects on first use
     session_factory = create_session_factory(engine)
+    purge_engine = create_engine(settings.database_purge_url)
 
     permissions = PermissionRegistry()
     for module in modules:
@@ -98,6 +101,8 @@ def build_container(
         ids=ids,
         engine=engine,
         session_factory=session_factory,
+        purge_engine=purge_engine,
+        purge_session_factory=create_session_factory(purge_engine),
         audit=SqlAuditLogger(session_factory, clock, ids),
         jobs=jobs,
         messenger=messenger,

@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
+from app.platform.jobs.application.daily import EnsureDailyJobs
 from app.platform.jobs.application.dispatch_outbox import DispatchOutbox
 from app.platform.jobs.application.run_due_jobs import RunDueJobs
 
@@ -25,13 +26,16 @@ class TickResponse(BaseModel):
     jobs_failed: int
 
 
-def build_router(dispatch: DispatchOutbox, run_jobs: RunDueJobs, cron_secret: str) -> APIRouter:
+def build_router(
+    dispatch: DispatchOutbox, run_jobs: RunDueJobs, daily: EnsureDailyJobs, cron_secret: str
+) -> APIRouter:
     router = APIRouter(prefix="/internal/jobs", tags=["internal"], include_in_schema=False)
     expected = f"Bearer {cron_secret}".encode()
 
     async def tick(authorization: Annotated[str | None, Header()] = None) -> TickResponse:
         if not hmac.compare_digest((authorization or "").encode(), expected):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bad cron secret")
+        await daily()
         events = await dispatch()
         jobs = await run_jobs()
         return TickResponse(

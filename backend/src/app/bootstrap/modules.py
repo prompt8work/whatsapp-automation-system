@@ -15,6 +15,7 @@ from app.platform.identity.module import module as identity
 from app.platform.inbox.module import module as inbox
 from app.platform.jobs.module import module as jobs
 from app.platform.messaging.module import module as messaging
+from app.platform.retention.module import module as retention
 from app.platform.tenancy.module import module as tenancy
 from app.shared.module import ModuleDefinition
 
@@ -27,6 +28,7 @@ PLATFORM_MODULES: list[ModuleDefinition] = [
     messaging,
     conversations,
     inbox,
+    retention,
 ]
 
 INSTALLED_MODULES: list[ModuleDefinition] = [appointments]

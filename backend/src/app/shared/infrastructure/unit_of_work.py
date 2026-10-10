@@ -38,6 +38,7 @@ class SqlUnitOfWork:
         self._tenant_id = tenant_id
         self._session: AsyncSession | None = None
         self._tracked: list[AggregateRoot] = []
+        self._published: list[DomainEvent] = []
 
     @property
     def session(self) -> AsyncSession:
@@ -47,7 +48,7 @@ class SqlUnitOfWork:
 
     async def __aenter__(self) -> Self:
         self._session = self._session_factory()
-        self._tracked = []
+        self._tracked, self._published = [], []
         await self._session.begin()
         # Timestamps read back in UTC whatever the server's default timezone is (ARCH §13:
         # "store and process UTC"). Transaction-scoped, so safe behind a pooler.
@@ -79,17 +80,21 @@ class SqlUnitOfWork:
         if aggregate not in self._tracked:
             self._tracked.append(aggregate)
 
+    def publish(self, event: DomainEvent) -> None:
+        """An event with no aggregate to carry it (e.g. a purge: the aggregate is gone)."""
+        self._published.append(event)
+
     async def commit(self) -> None:
-        events: list[DomainEvent] = []
+        events: list[DomainEvent] = list(self._published)
         for aggregate in self._tracked:
             events.extend(aggregate.pull_events())
         await self._save_events(events)
         await self.session.commit()
-        self._tracked = []
+        self._tracked, self._published = [], []
 
     async def rollback(self) -> None:
         await self.session.rollback()
-        self._tracked = []
+        self._tracked, self._published = [], []
 
     async def _save_events(self, events: list[DomainEvent]) -> None:
         """Write events to the outbox. Modules with a history table extend this."""

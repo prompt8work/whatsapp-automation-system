@@ -148,6 +148,9 @@ class Flow:
     key: str  # "<module>.<name>", e.g. "appointments.booking"
     module_key: str
     steps: tuple[Step, ...]
+    # Typing one of these (normalized, e.g. "delete my data") starts this flow from ANYWHERE,
+    # even in the middle of another flow - like the platform's MENU / AGENT commands.
+    keywords: frozenset[str] = frozenset()
 
     def index_of(self, step_key: str) -> int:
         for i, step in enumerate(self.steps):

@@ -13,10 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.appointments.domain.appointment import Appointment
 from app.modules.appointments.domain.case import Case, CaseStatus
+from app.modules.appointments.domain.deletion_request import DeletionRequest, DeletionStatus
 from app.modules.appointments.domain.doctor import Doctor
 from app.modules.appointments.domain.errors import (
     AppointmentNotFoundError,
     CaseNotFoundError,
+    DeletionRequestNotFoundError,
     DoctorNotFoundError,
     PatientNotFoundError,
     SlotUnavailableError,
@@ -33,6 +35,7 @@ from app.modules.appointments.infrastructure.tables import (
     appointment_events,
     appointments,
     cases,
+    deletion_requests,
     doctors,
     patients,
     slot_reservations,
@@ -520,3 +523,81 @@ class SqlAppointmentHistory:
             )
             for r in rows.mappings()
         ]
+
+
+# ================================================================== deletion requests
+def _deletion(r: RowMapping) -> DeletionRequest:
+    return DeletionRequest(
+        id=r["id"],
+        tenant_id=TenantId(r["tenant_id"]),
+        contact_id=r["contact_id"],
+        patient_ids=tuple(UUID(p) for p in r["patient_ids"]),
+        requested_at=r["requested_at"],
+        status=DeletionStatus(r["status"]),
+        decided_at=r["decided_at"],
+        decided_by=r["decided_by"],
+        rejection_reason=r["rejection_reason"],
+        deleted_counts=dict(r["deleted_counts"]),
+        version=r["version"],
+    )
+
+
+def _deletion_row(d: DeletionRequest) -> dict[str, Any]:
+    return {
+        "id": d.id,
+        "tenant_id": d.tenant_id,
+        "contact_id": d.contact_id,
+        "patient_ids": [str(p) for p in d.patient_ids],
+        "status": d.status.value,
+        "requested_at": d.requested_at,
+        "decided_at": d.decided_at,
+        "decided_by": d.decided_by,
+        "rejection_reason": d.rejection_reason,
+        "deleted_counts": d.deleted_counts,
+        "version": d.version,
+    }
+
+
+class SqlDeletionRequestRepository:
+    def __init__(self, session: AsyncSession, uow: UnitOfWork) -> None:
+        self._session, self._uow = session, uow
+
+    async def _many(self, stmt: Any) -> list[DeletionRequest]:
+        found = [_deletion(r) for r in (await self._session.execute(stmt)).mappings()]
+        for request in found:
+            self._uow.track(request)
+        return found
+
+    async def get(self, request_id: UUID) -> DeletionRequest:
+        found = await self._many(
+            select(deletion_requests).where(deletion_requests.c.id == request_id)
+        )
+        if not found:
+            raise DeletionRequestNotFoundError()
+        return found[0]
+
+    async def pending_for_contact(self, contact_id: UUID) -> DeletionRequest | None:
+        found = await self._many(
+            select(deletion_requests).where(
+                deletion_requests.c.contact_id == contact_id,
+                deletion_requests.c.status == DeletionStatus.PENDING.value,
+            )
+        )
+        return found[0] if found else None
+
+    async def list(self, status: DeletionStatus | None, limit: int) -> list[DeletionRequest]:
+        stmt = select(deletion_requests)
+        if status is not None:
+            stmt = stmt.where(deletion_requests.c.status == status.value)
+        return await self._many(stmt.order_by(deletion_requests.c.requested_at.desc()).limit(limit))
+
+    async def add(self, request: DeletionRequest) -> None:
+        await self._session.execute(insert(deletion_requests).values(_deletion_row(request)))
+        self._uow.track(request)
+
+    async def save(self, request: DeletionRequest) -> None:
+        await _versioned_update(
+            self._session, deletion_requests, request.id, request.version, _deletion_row(request)
+        )
+        request.version += 1
+        self._uow.track(request)

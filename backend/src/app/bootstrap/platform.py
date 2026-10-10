@@ -16,6 +16,8 @@ from app.platform.identity.application.use_cases import IdentityUseCases
 from app.platform.identity.wiring import build_identity_use_cases
 from app.platform.inbox.wiring import InboxHandoverDesk
 from app.platform.messaging.application.ports import WhatsAppGateway
+from app.platform.retention.application.use_cases import RUN_JOB as RETENTION_JOB
+from app.platform.retention.wiring import Retention, build_retention
 from app.platform.tenancy.contracts import TenancyFacade
 from app.platform.tenancy.wiring import build_facade
 from app.shared.kernel.clock import Clock
@@ -30,6 +32,7 @@ class Platform:
     tenancy: TenancyFacade
     identity: IdentityUseCases
     conversations: Conversations
+    retention: Retention
 
 
 def build_platform(
@@ -66,4 +69,6 @@ def build_platform(
         handover=InboxHandoverDesk(container),
     )
     container.job_handlers.register(PROCESS_JOB, conversations.process_job)
-    return Platform(container, modules, tenancy, identity, conversations)
+    retention = build_retention(container, modules)
+    container.job_handlers.register(RETENTION_JOB, retention.run.handle)
+    return Platform(container, modules, tenancy, identity, conversations, retention)

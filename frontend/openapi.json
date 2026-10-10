@@ -275,6 +275,20 @@
             "maximum": 168.0,
             "title": "Request Expiry Hours",
             "type": "number"
+          },
+          "retention_closed_days": {
+            "default": 60,
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Retention Closed Days",
+            "type": "integer"
+          },
+          "retention_open_days": {
+            "default": 365,
+            "maximum": 3650.0,
+            "minimum": 30.0,
+            "title": "Retention Open Days",
+            "type": "integer"
           }
         },
         "title": "AppointmentSettings",
@@ -479,6 +493,18 @@
           "closing_note": {
             "title": "Closing Note",
             "type": "string"
+          },
+          "deletes_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletes At"
           },
           "id": {
             "format": "uuid",
@@ -841,6 +867,166 @@
         ],
         "title": "CredentialsRequest",
         "type": "object"
+      },
+      "DeletionPatient": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DeletionPatient",
+        "type": "object"
+      },
+      "DeletionRecordResponse": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "purger": {
+            "title": "Purger",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "subject_id": {
+            "format": "uuid",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "purger",
+          "subject_type",
+          "subject_id",
+          "rule",
+          "counts",
+          "at"
+        ],
+        "title": "DeletionRecordResponse",
+        "type": "object"
+      },
+      "DeletionRequestResponse": {
+        "properties": {
+          "answer_by": {
+            "format": "date-time",
+            "title": "Answer By",
+            "type": "string"
+          },
+          "contact_id": {
+            "format": "uuid",
+            "title": "Contact Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "deleted_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Deleted Counts",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "patients": {
+            "items": {
+              "$ref": "#/components/schemas/DeletionPatient"
+            },
+            "title": "Patients",
+            "type": "array"
+          },
+          "rejection_reason": {
+            "title": "Rejection Reason",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "completed",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "contact_id",
+          "patients",
+          "status",
+          "requested_at",
+          "answer_by",
+          "decided_at",
+          "rejection_reason",
+          "deleted_counts"
+        ],
+        "title": "DeletionRequestResponse",
+        "type": "object"
+      },
+      "DeletionStatus": {
+        "enum": [
+          "pending",
+          "completed",
+          "rejected"
+        ],
+        "title": "DeletionStatus",
+        "type": "string"
       },
       "DoctorResponse": {
         "properties": {
@@ -1395,6 +1581,21 @@
         "title": "RegisterPatientRequest",
         "type": "object"
       },
+      "RejectDeletionRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "RejectDeletionRequest",
+        "type": "object"
+      },
       "RenamePatientRequest": {
         "properties": {
           "full_name": {
@@ -1637,6 +1838,46 @@
           "reason"
         ],
         "title": "TimeOffSchema",
+        "type": "object"
+      },
+      "UpcomingDeletionResponse": {
+        "properties": {
+          "due_at": {
+            "format": "date-time",
+            "title": "Due At",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "purger": {
+            "title": "Purger",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "subject_id": {
+            "format": "uuid",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purger",
+          "subject_type",
+          "subject_id",
+          "rule",
+          "due_at",
+          "label"
+        ],
+        "title": "UpcomingDeletionResponse",
         "type": "object"
       },
       "UpdateDetailsRequest": {
@@ -3693,6 +3934,203 @@
         ]
       }
     },
+    "/api/deletion-requests": {
+      "get": {
+        "operationId": "deletion_requests_api_deletion_requests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DeletionStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeletionRequestResponse"
+                  },
+                  "title": "Response Deletion Requests Api Deletion Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deletion Requests",
+        "tags": [
+          "appointments"
+        ]
+      }
+    },
+    "/api/deletion-requests/{request_id}/approve": {
+      "post": {
+        "operationId": "approve_deletion_api_deletion_requests__request_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Deletion",
+        "tags": [
+          "appointments"
+        ]
+      }
+    },
+    "/api/deletion-requests/{request_id}/reject": {
+      "post": {
+        "operationId": "reject_deletion_api_deletion_requests__request_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectDeletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Deletion",
+        "tags": [
+          "appointments"
+        ]
+      }
+    },
     "/api/doctors": {
       "get": {
         "operationId": "list_doctors_api_doctors_get",
@@ -5395,6 +5833,124 @@
         "summary": "Put Credentials",
         "tags": [
           "platform"
+        ]
+      }
+    },
+    "/api/retention/records": {
+      "get": {
+        "operationId": "list_records_api_retention_records_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeletionRecordResponse"
+                  },
+                  "title": "Response List Records Api Retention Records Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Records",
+        "tags": [
+          "retention"
+        ]
+      }
+    },
+    "/api/retention/upcoming": {
+      "get": {
+        "operationId": "list_upcoming_api_retention_upcoming_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UpcomingDeletionResponse"
+                  },
+                  "title": "Response List Upcoming Api Retention Upcoming Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Upcoming",
+        "tags": [
+          "retention"
         ]
       }
     },

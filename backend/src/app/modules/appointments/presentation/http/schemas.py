@@ -12,6 +12,7 @@ from app.modules.appointments.application.dto import (
     AppointmentDetailDTO,
     AppointmentDTO,
     CaseDTO,
+    DeletionRequestDTO,
     DoctorDTO,
     PatientDTO,
     SlotDTO,
@@ -36,6 +37,10 @@ class AppointmentSettings(BaseModel):
     change_cutoff_hours: float = Field(default=2, ge=0, le=72)
     min_notice_minutes: int = Field(default=60, ge=0, le=7 * 24 * 60)
     horizon_days: int = Field(default=30, ge=1, le=365)
+    # Retention (PRD AP-10.7): closed cases deleted N days after closing (RT-1), open cases
+    # N days after their last activity (RT-2).
+    retention_closed_days: int = Field(default=60, ge=1, le=3650)
+    retention_open_days: int = Field(default=365, ge=30, le=3650)
     booking_fields: list[BookingFieldSchema] = Field(default_factory=list, max_length=10)
 
 
@@ -153,6 +158,7 @@ class CaseResponse(BaseModel):
     last_activity_at: datetime
     closing_note: str
     legal_hold: bool
+    deletes_at: datetime | None = None
 
     @classmethod
     def from_dto(cls, c: CaseDTO) -> CaseResponse:
@@ -252,3 +258,39 @@ class AttendanceRequest(BaseModel):
 class UpdateDetailsRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
     fields: dict[str, Any] | None = None
+
+
+# ------------------------------------------------------------------ deletion requests
+class DeletionPatient(BaseModel):
+    id: UUID
+    name: str | None  # None once deleted
+
+
+class DeletionRequestResponse(BaseModel):
+    id: UUID
+    contact_id: UUID
+    patients: list[DeletionPatient]
+    status: Literal["pending", "completed", "rejected"]
+    requested_at: datetime
+    answer_by: datetime
+    decided_at: datetime | None
+    rejection_reason: str
+    deleted_counts: dict[str, int]
+
+    @classmethod
+    def from_dto(cls, d: DeletionRequestDTO) -> DeletionRequestResponse:
+        return cls(
+            id=d.id,
+            contact_id=d.contact_id,
+            patients=[DeletionPatient(id=pid, name=name) for pid, name in d.patients.items()],
+            status=d.status,
+            requested_at=d.requested_at,
+            answer_by=d.answer_by,
+            decided_at=d.decided_at,
+            rejection_reason=d.rejection_reason,
+            deleted_counts=d.deleted_counts,
+        )
+
+
+class RejectDeletionRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)

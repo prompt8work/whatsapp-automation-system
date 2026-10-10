@@ -3,7 +3,7 @@ skips itself when the answer is already known (DR-5), and calls the SAME use cas
 dashboard (actor = the contact, channel = WhatsApp).
 
 Session data keys: patient_id, patient_name, new_patient, location_id, doctor_id, day, start,
-reason, fields, appointment_id.
+reason, fields, appointment_id, delete_patients.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from uuid import UUID
 
 from app.modules.appointments.application.commands.booking import RequestAppointmentCommand
 from app.modules.appointments.application.commands.changes import CancelCommand, RescheduleCommand
+from app.modules.appointments.application.commands.deletion import RequestDeletionCommand
 from app.modules.appointments.application.commands.patients import RegisterPatientCommand
 from app.modules.appointments.application.dto import AppointmentDTO, DoctorDTO
 from app.modules.appointments.application.ports import ClinicDirectory
@@ -45,12 +46,15 @@ from app.shared.kernel.actor import Actor, Channel
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.messages import Buttons, Choice, ListMenu, menu
 
-BOOK, MENU, RESCHEDULE, CANCEL = (
+BOOK, MENU, RESCHEDULE, CANCEL, DELETE = (
     "appointments.book",
     "appointments.menu",
     "appointments.reschedule",
     "appointments.cancel",
+    "appointments.delete_data",
 )
+#: Start the "delete my data" flow from anywhere (PRD AP-10.8).
+DELETE_WORDS = frozenset({"delete my data", "delete data", "erase my data", "delete my details"})
 DAYS_TO_OFFER = 10  # a WhatsApp list holds at most 10 rows
 
 
@@ -563,6 +567,7 @@ class MainMenu(BaseStep):
         label = "appointments.menu.book_another" if upcoming else "appointments.menu.book"
         options.append(Choice("menu:book", ctx.t(label)))
         options.append(Choice("menu:staff", ctx.t("appointments.menu.staff")))
+        options.append(Choice("menu:delete", ctx.t("appointments.menu.delete_data")))
         return options
 
     async def prompt(self, ctx: FlowContext) -> None:
@@ -599,7 +604,8 @@ class MainMenu(BaseStep):
             ctx.say(ctx.t("conversations.agent_requested"))
             ctx.request_handover()
             return Finish()
-        return StartFlow({"book": BOOK, "reschedule": RESCHEDULE, "cancel": CANCEL}[picked])
+        flows = {"book": BOOK, "reschedule": RESCHEDULE, "cancel": CANCEL, "delete": DELETE}
+        return StartFlow(flows[picked])
 
 
 class PickAppointment(BaseStep):
@@ -769,4 +775,96 @@ class ConfirmCancel(BaseStep):
             ctx.say(ctx.t("appointments.change.too_late"))
             return Finish()
         ctx.say(ctx.t("appointments.cancel.done", ref=cancelled.reference))
+        return Finish()
+
+
+# =================================================================== delete my data (§7.10)
+class ChooseWhoToDelete(BaseStep):
+    """AP-10.12: several patients on this number -> whose data (or everyone's)?"""
+
+    key = "delete_who"
+
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+    async def should_skip(self, ctx: FlowContext) -> bool:
+        if "delete_patients" in ctx.data:
+            return True
+        if await self.bot.uc(ctx).pending_deletion_of(ctx.contact.id):
+            ctx.say(ctx.t("appointments.delete.already"))
+            ctx.data["delete_patients"] = []
+            return True
+        patients = await self.bot.uc(ctx).patients_of_contact(ctx.contact.id)
+        if len(patients) > 1:
+            return False
+        if not patients:
+            ctx.say(ctx.t("appointments.delete.nothing"))
+        ctx.data["delete_patients"] = [str(p.id) for p in patients]
+        return True
+
+    async def _options(self, ctx: FlowContext) -> dict[str, str]:
+        patients = await self.bot.uc(ctx).patients_of_contact(ctx.contact.id)
+        return {str(p.id): p.full_name for p in patients}
+
+    async def prompt(self, ctx: FlowContext) -> None:
+        choices = [
+            Choice(f"del:{pid}", name[:24]) for pid, name in (await self._options(ctx)).items()
+        ]
+        choices = [*choices[:9], Choice("del:all", ctx.t("appointments.delete.everyone"))]
+        ctx.say(
+            menu(ctx.t("appointments.delete.who"), choices, button=ctx.t("appointments.choose"))
+        )
+
+    async def handle(self, ctx: FlowContext, reply: InboundReply) -> StepResult:
+        options = await self._options(ctx)
+        picked = _pick(reply, "del") or _match_title(reply, options)
+        if picked == "all" or reply.normalized in {"everyone", "all"}:
+            ctx.data["delete_patients"] = list(options)
+        elif picked in options:
+            ctx.data["delete_patients"] = [picked]
+        else:
+            return Retry("appointments.book.pick_from_list")
+        return Next()
+
+
+class ConfirmDeletion(BaseStep):
+    """AP-10.9: say what goes and what stays (payments), then ask to confirm."""
+
+    key = "delete_confirm"
+
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+    async def should_skip(self, ctx: FlowContext) -> bool:
+        return not ctx.data.get("delete_patients")
+
+    async def prompt(self, ctx: FlowContext) -> None:
+        patients = await self.bot.uc(ctx).patients_of_contact(ctx.contact.id)
+        chosen = set(ctx.data["delete_patients"])
+        names = ", ".join(p.full_name for p in patients if str(p.id) in chosen)
+        ctx.say(
+            Buttons(
+                ctx.t("appointments.delete.explain", names=names),
+                (
+                    Choice("delete:yes", ctx.t("appointments.delete.yes")),
+                    Choice("delete:no", ctx.t("appointments.delete.no")),
+                ),
+            )
+        )
+
+    async def handle(self, ctx: FlowContext, reply: InboundReply) -> StepResult:
+        answer = _pick(reply, "delete") or {"yes": "yes", "no": "no"}.get(reply.normalized)
+        if answer == "no":
+            ctx.say(ctx.t("appointments.delete.kept"))
+            return Finish()
+        if answer != "yes":
+            return Retry("appointments.book.pick_from_list")
+        await self.bot.uc(ctx).request_deletion(
+            RequestDeletionCommand(
+                ctx.tenant_id,
+                ctx.contact.id,
+                tuple(UUID(p) for p in ctx.data["delete_patients"]),
+            )
+        )
+        ctx.say(ctx.t("appointments.delete.requested"))
         return Finish()

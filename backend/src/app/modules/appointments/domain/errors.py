@@ -73,3 +73,21 @@ class CaseClosedError(DomainError):
 
 class InvalidPatientError(DomainError):
     code = "appointments.invalid_patient"
+
+
+class DeletionRequestNotFoundError(NotFoundError):
+    code = "appointments.deletion_request_not_found"
+
+
+class DeletionRequestDecidedError(DomainError):
+    code = "appointments.deletion_request_decided"
+
+
+class DeletionBlockedError(DomainError):
+    """A legal hold (RT-6) stops an on-request deletion until staff lift it."""
+
+    code = "appointments.deletion_blocked"
+
+
+class RejectionReasonRequiredError(DomainError):
+    code = "appointments.rejection_reason_required"

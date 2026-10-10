@@ -7,16 +7,22 @@ from app.modules.appointments.application.commands.decisions import (
     EXPIRE_RESCHEDULE_JOB,
 )
 from app.modules.appointments.presentation.http.routers import HTTP_ERROR_STATUS
-from app.modules.appointments.presentation.whatsapp.notifications import NOTIFY
+from app.modules.appointments.presentation.whatsapp.notifications import (
+    DELETION_NOTICES,
+    NOTIFY,
+)
 from app.modules.appointments.wiring import (
     LOCALES,
     MODULE_KEY,
     book_flow,
     build_routers,
     cancel_flow,
+    case_purger,
+    delete_data_flow,
     expire_stale,
     menu_flow,
     new_contact_rule,
+    notify_deletion_decision,
     notify_patient,
     reschedule_flow,
     returning_contact_rule,
@@ -46,7 +52,7 @@ module = ModuleDefinition(
         "appointment.approve": "Approve or decline requests and reschedules",
         "appointment.manage": "Reschedule, cancel and edit appointments",
         "appointment.attendance": "Mark appointments completed or no-show",
-        "case.manage": "Close and reopen cases, set legal holds",
+        "case.manage": "Close and reopen cases, set legal holds, decide data deletion requests",
         "doctor.manage": "Add doctors and change their hours",
         "appointment.settings.manage": "Change booking rules",
     },
@@ -59,9 +65,11 @@ module = ModuleDefinition(
         "AppointmentRequested": [schedule_expiry],
         "RescheduleRequested": [schedule_expiry],
         **{event_type: [notify_patient] for event_type in NOTIFY},
+        **{event_type: [notify_deletion_decision] for event_type in DELETION_NOTICES},
     },
     # WhatsApp (PRD §7.1): rules pick the flow for a new conversation; flows are the chats.
     router_rules=[returning_contact_rule, new_contact_rule],
-    flows=[book_flow, menu_flow, reschedule_flow, cancel_flow],
+    flows=[book_flow, menu_flow, reschedule_flow, cancel_flow, delete_data_flow],
     locales_dir=LOCALES,
+    purgers=[case_purger],  # RT-1..RT-3
 )

@@ -61,7 +61,17 @@ cd frontend && npm run check && npm run build
 ```
 
 Tests marked `db` need PostgreSQL: set `TEST_DATABASE_URL` (role `app_rw`, e.g. the value of
-`DATABASE_URL`) after `alembic upgrade head`; without it they are skipped.
+`DATABASE_URL`) after `alembic upgrade head`; without it they are skipped. Retention tests also use
+role `app_purge`: by default the same URL with `app_purge:app_purge`, or set `TEST_DATABASE_PURGE_URL`.
+
+## Data retention
+
+A daily job (20:00 UTC, scheduled by the cron tick) deletes closed cases after 60 days and inactive
+open cases after 12 months. Each clinic can change both periods in Settings → Booking rules. A WhatsApp
+contact is deleted once it has no patients and has been quiet for 60 days. Patients can type
+`DELETE MY DATA`, and staff approve or reject the request on the **Privacy** page. Payment records are
+never deleted. Purges use the `app_purge` database role (`DATABASE_PURGE_URL`); in production use
+its pooled connection string, like `DATABASE_URL`.
 
 `uv run lint-imports` and `npm run lint` enforce the architecture's layer rules. If they fail, the code
 is in the wrong layer; move it rather than silencing the rule.

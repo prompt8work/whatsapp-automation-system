@@ -1,7 +1,8 @@
 """A clinic's booking rules, built from its appointments module settings (PRD AP-7.7).
 
 Defaults match the PRD: approval required, reason required, requests expire after 4 h,
-patients cannot change within 2 h of the appointment, book at least 1 h ahead, up to 30 days.
+patients cannot change within 2 h of the appointment, book at least 1 h ahead, up to 30 days;
+closed cases are deleted 60 days after closing, open ones 12 months after the last activity.
 """
 
 from __future__ import annotations
@@ -69,6 +70,8 @@ class BookingPolicy:
     change_cutoff: timedelta = timedelta(hours=2)
     min_notice: timedelta = timedelta(hours=1)
     horizon_days: int = 30
+    retention_closed: timedelta = timedelta(days=60)  # RT-1
+    retention_open: timedelta = timedelta(days=365)  # RT-2
     booking_fields: tuple[BookingField, ...] = field(default=())
 
     @classmethod
@@ -81,6 +84,8 @@ class BookingPolicy:
             change_cutoff=timedelta(hours=float(settings.get("change_cutoff_hours", 2))),
             min_notice=timedelta(minutes=float(settings.get("min_notice_minutes", 60))),
             horizon_days=int(settings.get("horizon_days", d.horizon_days)),
+            retention_closed=timedelta(days=int(settings.get("retention_closed_days", 60))),
+            retention_open=timedelta(days=int(settings.get("retention_open_days", 365))),
             booking_fields=tuple(
                 BookingField(
                     key=f["key"],

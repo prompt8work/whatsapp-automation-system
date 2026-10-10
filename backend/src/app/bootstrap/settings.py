@@ -20,6 +20,8 @@ class Settings(BaseSettings):
 
     # Runtime connection: role app_rw, POOLED url in production.
     database_url: str = "postgresql+psycopg://app_rw:app_rw@localhost:5432/wa_platform"
+    # Retention purges: role app_purge (the only role that may delete append-only history).
+    database_purge_url: str = "postgresql+psycopg://app_purge:app_purge@localhost:5432/wa_platform"
     # Migrations: role app_owner, DIRECT (non-pooled) url.
     database_migration_url: str = (
         "postgresql+psycopg://app_owner:app_owner@localhost:5432/wa_platform"

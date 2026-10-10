@@ -17,6 +17,13 @@ from app.modules.appointments.application.commands.decisions import (
     DeclineRequest,
     DeclineReschedule,
 )
+from app.modules.appointments.application.commands.deletion import (
+    ApproveDeletion,
+    ListDeletionRequests,
+    PendingDeletionOf,
+    RejectDeletion,
+    RequestDeletion,
+)
 from app.modules.appointments.application.commands.doctors import (
     AddDoctor,
     ChangeTimeOff,
@@ -75,3 +82,9 @@ class AppointmentsUseCases:
     list_requests: ListRequests
     detail: GetAppointmentDetail
     upcoming_for_contact: UpcomingForContact
+    # deletion on request (PRD AP-10.8-10.13)
+    request_deletion: RequestDeletion
+    pending_deletion_of: PendingDeletionOf
+    list_deletion_requests: ListDeletionRequests
+    approve_deletion: ApproveDeletion
+    reject_deletion: RejectDeletion

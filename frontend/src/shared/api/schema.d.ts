@@ -398,6 +398,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/deletion-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Deletion Requests */
+        get: operations["deletion_requests_api_deletion_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deletion-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Deletion */
+        post: operations["approve_deletion_api_deletion_requests__request_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deletion-requests/{request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Deletion */
+        post: operations["reject_deletion_api_deletion_requests__request_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/doctors": {
         parameters: {
             query?: never;
@@ -800,6 +851,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/retention/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Records */
+        get: operations["list_records_api_retention_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/retention/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Upcoming */
+        get: operations["list_upcoming_api_retention_upcoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tenant": {
         parameters: {
             query?: never;
@@ -1017,6 +1102,16 @@ export interface components {
              * @default 4
              */
             request_expiry_hours: number;
+            /**
+             * Retention Closed Days
+             * @default 60
+             */
+            retention_closed_days: number;
+            /**
+             * Retention Open Days
+             * @default 365
+             */
+            retention_open_days: number;
         };
         /**
          * AppointmentStatus
@@ -1105,6 +1200,8 @@ export interface components {
             closed_at: string | null;
             /** Closing Note */
             closing_note: string;
+            /** Deletes At */
+            deletes_at?: string | null;
             /**
              * Id
              * Format: uuid
@@ -1247,6 +1344,87 @@ export interface components {
             /** Access Token */
             access_token: string;
         };
+        /** DeletionPatient */
+        DeletionPatient: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string | null;
+        };
+        /** DeletionRecordResponse */
+        DeletionRecordResponse: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Purger */
+            purger: string;
+            /** Rule */
+            rule: string;
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Subject Type */
+            subject_type: string;
+        };
+        /** DeletionRequestResponse */
+        DeletionRequestResponse: {
+            /**
+             * Answer By
+             * Format: date-time
+             */
+            answer_by: string;
+            /**
+             * Contact Id
+             * Format: uuid
+             */
+            contact_id: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Deleted Counts */
+            deleted_counts: {
+                [key: string]: number;
+            };
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Patients */
+            patients: components["schemas"]["DeletionPatient"][];
+            /** Rejection Reason */
+            rejection_reason: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "completed" | "rejected";
+        };
+        /**
+         * DeletionStatus
+         * @enum {string}
+         */
+        DeletionStatus: "pending" | "completed" | "rejected";
         /** DoctorResponse */
         DoctorResponse: {
             /**
@@ -1477,6 +1655,11 @@ export interface components {
              */
             phone: string;
         };
+        /** RejectDeletionRequest */
+        RejectDeletionRequest: {
+            /** Reason */
+            reason: string;
+        };
         /** RenamePatientRequest */
         RenamePatientRequest: {
             /** Full Name */
@@ -1603,6 +1786,27 @@ export interface components {
              * Format: date-time
              */
             start: string;
+        };
+        /** UpcomingDeletionResponse */
+        UpcomingDeletionResponse: {
+            /**
+             * Due At
+             * Format: date-time
+             */
+            due_at: string;
+            /** Label */
+            label: string;
+            /** Purger */
+            purger: string;
+            /** Rule */
+            rule: string;
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Subject Type */
+            subject_type: string;
         };
         /** UpdateDetailsRequest */
         UpdateDetailsRequest: {
@@ -2602,6 +2806,109 @@ export interface operations {
             };
         };
     };
+    deletion_requests_api_deletion_requests_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["DeletionStatus"] | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequestResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_deletion_api_deletion_requests__request_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_deletion_api_deletion_requests__request_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectDeletionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_doctors_api_doctors_get: {
         parameters: {
             query?: {
@@ -3540,6 +3847,70 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_records_api_retention_records_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRecordResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_upcoming_api_retention_upcoming_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpcomingDeletionResponse"][];
+                };
             };
             /** @description Validation Error */
             422: {

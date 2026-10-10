@@ -1,13 +1,14 @@
 """Case: one treatment episode grouping a patient's appointments (PRD §7.10).
 
-OPEN -> CLOSED (by staff, only when nothing is upcoming) -> PURGED (retention, build step 7).
+OPEN -> CLOSED (by staff, only when nothing is upcoming) -> deleted by retention
+(infrastructure/purge.py - a purged case simply no longer exists).
 A closed case can be reopened until it is purged.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
@@ -76,3 +77,12 @@ class Case(TenantAggregateRoot):
 
     def set_legal_hold(self, hold: bool) -> None:
         self.legal_hold = hold
+
+    def deletes_at(self, *, closed_after: timedelta, open_after: timedelta) -> datetime | None:
+        """When retention will delete it (AP-10.6). None on legal hold. An active appointment
+        postpones it further (RT-6) - this is the earliest possible date."""
+        if self.legal_hold:
+            return None
+        if self.closed_at is not None:
+            return self.closed_at + closed_after
+        return self.last_activity_at + open_after

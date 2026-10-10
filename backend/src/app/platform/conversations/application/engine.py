@@ -39,6 +39,16 @@ class FlowRegistry:
     def get(self, key: str) -> Flow | None:
         return self._flows.get(key)
 
+    def for_keyword(self, word: str, enabled_modules: frozenset[str]) -> Flow | None:
+        return next(
+            (
+                f
+                for f in self._flows.values()
+                if word in f.keywords and f.module_key in enabled_modules
+            ),
+            None,
+        )
+
 
 class Router:
     """Picks the flow for a new conversation: the first matching rule, in priority order,
@@ -60,6 +70,10 @@ class Router:
 class FlowEngine:
     def __init__(self, flows: FlowRegistry, *, max_attempts: int = MAX_ATTEMPTS) -> None:
         self._flows, self._max_attempts = flows, max_attempts
+
+    def keyword_flow(self, ctx: FlowContext) -> str | None:
+        flow = self._flows.for_keyword(ctx.reply.normalized, ctx.enabled_modules)
+        return flow.key if flow else None
 
     async def start(self, ctx: FlowContext, session: ConversationSession, flow_key: str) -> None:
         flow = self._flows.get(flow_key)

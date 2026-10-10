@@ -9,8 +9,10 @@ from uuid import UUID
 
 from app.modules.appointments.domain.appointment import Appointment
 from app.modules.appointments.domain.case import Case
+from app.modules.appointments.domain.deletion_request import DeletionRequest
 from app.modules.appointments.domain.doctor import Doctor
 from app.modules.appointments.domain.patient import Patient
+from app.modules.appointments.domain.policy import BookingPolicy
 from app.modules.appointments.domain.repositories import HistoryEntry
 from app.modules.appointments.domain.values import Slot
 
@@ -89,9 +91,15 @@ class CaseDTO:
     last_activity_at: datetime
     closing_note: str
     legal_hold: bool
+    deletes_at: datetime | None = None  # filled where the clinic's policy is at hand
 
     @classmethod
-    def from_domain(cls, c: Case) -> CaseDTO:
+    def from_domain(cls, c: Case, policy: BookingPolicy | None = None) -> CaseDTO:
+        deletes_at = (
+            c.deletes_at(closed_after=policy.retention_closed, open_after=policy.retention_open)
+            if policy
+            else None
+        )
         return cls(
             c.id,
             c.patient_id,
@@ -101,6 +109,7 @@ class CaseDTO:
             c.last_activity_at,
             c.closing_note,
             c.legal_hold,
+            deletes_at,
         )
 
 
@@ -152,3 +161,31 @@ class AppointmentDetailDTO:
     appointment: AppointmentDTO
     phone: str
     history: list[HistoryEntry] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DeletionRequestDTO:
+    id: UUID
+    contact_id: UUID
+    # patient id -> name; None once the patient's data is gone
+    patients: dict[UUID, str | None]
+    status: str
+    requested_at: datetime
+    answer_by: datetime
+    decided_at: datetime | None
+    rejection_reason: str
+    deleted_counts: dict[str, int]
+
+    @classmethod
+    def from_domain(cls, d: DeletionRequest, names: dict[UUID, str]) -> DeletionRequestDTO:
+        return cls(
+            d.id,
+            d.contact_id,
+            {pid: names.get(pid) for pid in d.patient_ids},
+            d.status.value,
+            d.requested_at,
+            d.answer_by,
+            d.decided_at,
+            d.rejection_reason,
+            d.deleted_counts,
+        )

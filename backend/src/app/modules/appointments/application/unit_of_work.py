@@ -6,6 +6,7 @@ from app.modules.appointments.domain.repositories import (
     AppointmentHistory,
     AppointmentRepository,
     CaseRepository,
+    DeletionRequestRepository,
     DoctorRepository,
     PatientRepository,
     SlotReservations,
@@ -31,3 +32,6 @@ class AppointmentsUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def history(self) -> AppointmentHistory: ...
+
+    @property
+    def deletion_requests(self) -> DeletionRequestRepository: ...

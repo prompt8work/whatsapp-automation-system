@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, time, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -333,3 +333,47 @@ def test_case_closes_only_without_active_appointments_and_can_reopen() -> None:
 
     case.reopen(actor=STAFF, at=NOW + timedelta(days=3))
     assert (case.is_open, case.closed_at) == (True, None)  # RT-5: purge countdown cancelled
+
+
+# ------------------------------------------------------------------ retention (§7.10)
+def test_case_deletion_date_follows_rt1_rt2_and_legal_hold() -> None:
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    case = Case.open(id=uuid4(), tenant_id=TenantId(uuid4()), patient_id=uuid4(), at=t0)
+    days = {"closed_after": timedelta(days=60), "open_after": timedelta(days=365)}
+    assert case.deletes_at(**days) == t0 + timedelta(days=365)  # RT-2
+    case.close(active_appointments=0, note="", actor=Actor.system(), at=t0 + timedelta(days=5))
+    assert case.deletes_at(**days) == t0 + timedelta(days=65)  # RT-1
+    case.set_legal_hold(True)
+    assert case.deletes_at(**days) is None  # RT-6
+
+
+def test_retention_periods_come_from_the_clinic_settings() -> None:  # AP-10.7
+    policy = BookingPolicy.from_settings({"retention_closed_days": 30})
+    assert (policy.retention_closed, policy.retention_open) == (
+        timedelta(days=30),
+        timedelta(days=365),
+    )
+
+
+def test_deletion_request_is_decided_once_and_rejection_needs_a_reason() -> None:
+    from app.modules.appointments.domain.deletion_request import DeletionRequest, DeletionStatus
+    from app.modules.appointments.domain.errors import (
+        DeletionRequestDecidedError,
+        RejectionReasonRequiredError,
+    )
+
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    request = DeletionRequest.create(
+        id=uuid4(), tenant_id=TenantId(uuid4()), contact_id=uuid4(), patient_ids=(uuid4(),), at=t0
+    )
+    assert request.answer_by == t0 + timedelta(days=7)  # AP-10.10
+    with pytest.raises(RejectionReasonRequiredError):
+        request.reject(reason="  ", actor=Actor.system(), at=t0)
+    request.complete(counts={"patients": 1}, actor=Actor.system(), at=t0)
+    assert request.status is DeletionStatus.COMPLETED
+    with pytest.raises(DeletionRequestDecidedError):
+        request.reject(reason="late", actor=Actor.system(), at=t0)
+    assert [e.event_type for e in request.pull_events()] == [
+        "DeletionRequested",
+        "DeletionRequestCompleted",
+    ]

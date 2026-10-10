@@ -36,6 +36,14 @@ PASSWORD = "integration-password-1"
 CRON_SECRET = "integration-cron-secret"
 
 
+def purge_url() -> str:
+    """TEST_DATABASE_PURGE_URL, or TEST_DATABASE_URL with role app_purge (same password scheme
+    as infra/postgres/init.sql)."""
+    return os.environ.get("TEST_DATABASE_PURGE_URL") or os.environ["TEST_DATABASE_URL"].replace(
+        "app_rw:app_rw@", "app_purge:app_purge@"
+    )
+
+
 def unique(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
@@ -116,6 +124,7 @@ async def make_api() -> AsyncIterator[ApiFactory]:
         settings = Settings(
             environment="test",
             database_url=os.environ["TEST_DATABASE_URL"],
+            database_purge_url=purge_url(),
             cron_secret=SecretStr(CRON_SECRET),
             **settings_overrides,
         )
@@ -132,6 +141,7 @@ async def make_api() -> AsyncIterator[ApiFactory]:
         await client.aclose()
     for app in apps:
         await app.state.container.engine.dispose()
+        await app.state.container.purge_engine.dispose()
 
 
 @pytest.fixture

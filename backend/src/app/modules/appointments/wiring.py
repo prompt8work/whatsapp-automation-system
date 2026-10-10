@@ -25,6 +25,13 @@ from app.modules.appointments.application.commands.decisions import (
     DeclineReschedule,
     ExpireStale,
 )
+from app.modules.appointments.application.commands.deletion import (
+    ApproveDeletion,
+    ListDeletionRequests,
+    PendingDeletionOf,
+    RejectDeletion,
+    RequestDeletion,
+)
 from app.modules.appointments.application.commands.doctors import (
     AddDoctor,
     ChangeTimeOff,
@@ -51,9 +58,13 @@ from app.modules.appointments.application.queries.reads import (
     UpcomingForContact,
 )
 from app.modules.appointments.application.use_cases import AppointmentsUseCases
+from app.modules.appointments.infrastructure.purge import CasePurger
 from app.modules.appointments.infrastructure.unit_of_work import SqlAppointmentsUnitOfWork
 from app.modules.appointments.presentation.http.routers import SettingsStore, build_router
-from app.modules.appointments.presentation.whatsapp.notifications import NotifyPatient
+from app.modules.appointments.presentation.whatsapp.notifications import (
+    NotifyDeletionDecision,
+    NotifyPatient,
+)
 from app.modules.appointments.presentation.whatsapp.rules import (
     NewContactRule,
     ReturningContactRule,
@@ -61,6 +72,8 @@ from app.modules.appointments.presentation.whatsapp.rules import (
 from app.modules.appointments.presentation.whatsapp.steps import (
     BOOK,
     CANCEL,
+    DELETE,
+    DELETE_WORDS,
     MENU,
     RESCHEDULE,
     AskBookingFields,
@@ -72,8 +85,10 @@ from app.modules.appointments.presentation.whatsapp.steps import (
     AskSlot,
     Bot,
     ChoosePatient,
+    ChooseWhoToDelete,
     ConfirmBooking,
     ConfirmCancel,
+    ConfirmDeletion,
     ConfirmReschedule,
     MainMenu,
     PickAppointment,
@@ -81,6 +96,7 @@ from app.modules.appointments.presentation.whatsapp.steps import (
 from app.platform.contacts.contracts import EnsureContactCommand, GetContactQuery
 from app.platform.contacts.integration import contacts_for
 from app.platform.conversations.integration import TomlTranslator, consent_step
+from app.platform.retention.integration import record_deletion_for
 from app.platform.tenancy.integration import tenancy_for
 from app.shared.application.conversation import Flow
 from app.shared.application.messaging import OutsideServiceWindowError, SendRequest
@@ -141,6 +157,7 @@ def use_cases_for(services: PlatformServices, tenant_id: TenantId) -> Appointmen
     clinic, contacts = ClinicAdapter(services), ContactsAdapter(services)
     clock, ids = services.clock, services.ids
     register = RegisterPatient(uow, clock, ids)
+    cancel = CancelAppointment(uow, clinic, clock)
     return AppointmentsUseCases(
         add_doctor=AddDoctor(uow, clinic, clock, ids),
         update_doctor=UpdateDoctor(uow, clinic, clock),
@@ -152,7 +169,7 @@ def use_cases_for(services: PlatformServices, tenant_id: TenantId) -> Appointmen
         register_patient_for_phone=RegisterPatientForPhone(contacts, register),
         rename_patient=RenamePatient(uow, clock),
         patients_of_contact=PatientsOfContact(uow),
-        cases_of_patient=CasesOfPatient(uow),
+        cases_of_patient=CasesOfPatient(uow, clinic),
         close_case=CloseCase(uow, clock),
         reopen_case=ReopenCase(uow, clock),
         set_legal_hold=SetLegalHold(uow),
@@ -162,13 +179,20 @@ def use_cases_for(services: PlatformServices, tenant_id: TenantId) -> Appointmen
         reschedule=RescheduleAppointment(uow, clinic, clock),
         approve_reschedule=ApproveReschedule(uow, clock),
         decline_reschedule=DeclineReschedule(uow, clock),
-        cancel=CancelAppointment(uow, clinic, clock),
+        cancel=cancel,
         record_attendance=RecordAttendance(uow, clock),
         update_details=UpdateAppointmentDetails(uow, clinic, clock),
         list_appointments=ListAppointments(uow, clinic),
         list_requests=ListRequests(uow),
         detail=GetAppointmentDetail(uow, contacts),
         upcoming_for_contact=UpcomingForContact(uow),
+        request_deletion=RequestDeletion(uow, clock, ids),
+        pending_deletion_of=PendingDeletionOf(uow),
+        list_deletion_requests=ListDeletionRequests(uow),
+        approve_deletion=ApproveDeletion(
+            uow, cancel, case_purger(services), record_deletion_for(services), clock
+        ),
+        reject_deletion=RejectDeletion(uow, clock),
     )
 
 
@@ -182,6 +206,12 @@ def build_routers(services: PlatformServices) -> Sequence[APIRouter]:
 
 def expire_stale(services: PlatformServices) -> ExpireStale:
     return ExpireStale(lambda t: uow_for(services, t), ClinicAdapter(services), services.clock)
+
+
+def case_purger(services: PlatformServices) -> CasePurger:
+    return CasePurger(
+        services.purge_session_factory, ClinicAdapter(services).settings, services.clock
+    )
 
 
 def schedule_expiry(services: PlatformServices) -> ScheduleExpiry:
@@ -229,6 +259,13 @@ def cancel_flow(services: PlatformServices) -> Flow:
     return Flow(CANCEL, MODULE_KEY, (PickAppointment(b), ConfirmCancel(b)))
 
 
+def delete_data_flow(services: PlatformServices) -> Flow:
+    b = bot(services)
+    return Flow(
+        DELETE, MODULE_KEY, (ChooseWhoToDelete(b), ConfirmDeletion(b)), keywords=DELETE_WORDS
+    )
+
+
 def returning_contact_rule(services: PlatformServices) -> ReturningContactRule:
     return ReturningContactRule(bot(services))
 
@@ -273,3 +310,7 @@ def notify_patient(services: PlatformServices) -> NotifyPatient:
         WhatsAppNotifier(services),
         TomlTranslator([LOCALES]),
     )
+
+
+def notify_deletion_decision(services: PlatformServices) -> NotifyDeletionDecision:
+    return NotifyDeletionDecision(WhatsAppNotifier(services), TomlTranslator([LOCALES]))

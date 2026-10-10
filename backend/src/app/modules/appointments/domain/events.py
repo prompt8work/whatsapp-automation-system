@@ -129,3 +129,34 @@ class DoctorChanged(DomainEvent):
     doctor_id: UUID
     what: str  # "added" | "updated" | "working_hours" | "time_off"
     actor: Actor
+
+
+@dataclass(frozen=True, kw_only=True)
+class CasePurged(DomainEvent):
+    """Retention deleted the case (RT-1/RT-2/AP-10.11). Payments detach their records (RT-7)."""
+
+    case_id: UUID
+    patient_id: UUID
+    patient_deleted: bool
+    rule: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class DeletionRequested(DomainEvent):
+    request_id: UUID
+    contact_id: UUID
+
+
+@dataclass(frozen=True, kw_only=True)
+class DeletionRequestRejected(DomainEvent):
+    request_id: UUID
+    contact_id: UUID
+    reason: str  # written by staff for the patient; no health details expected
+    actor: Actor
+
+
+@dataclass(frozen=True, kw_only=True)
+class DeletionRequestCompleted(DomainEvent):
+    request_id: UUID
+    contact_id: UUID
+    actor: Actor

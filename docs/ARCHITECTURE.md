@@ -441,7 +441,7 @@ use case ─► aggregate.record(event) ─► UoW.commit: [state + history + ou
 
 - `JobScheduler.schedule(type, run_at, payload, idempotency_key)` inserts into `scheduled_jobs`. `cancel(idempotency_key)` cancels the job, for example when an appointment is rescheduled and its reminders need to move.
 - **Vercel Cron** → `GET /internal/jobs/tick` (requires `CRON_SECRET`) every minute. Each tick claims due rows with `FOR UPDATE SKIP LOCKED LIMIT n`, runs the handlers from the registry, marks them done, and retries failures with back-off. Each tick stops after roughly 50 s so it finishes inside the function's time limit.
-- The daily retention job also runs through the tick (`platform.retention.run` with a daily `run_at`).
+- Daily jobs (`ModuleDefinition.daily_jobs`, e.g. `retention.run`) are scheduled by the tick itself, once per day, through an idempotency key.
 
 ### 8.6 Payments (three methods, one interface)
 
@@ -466,12 +466,20 @@ class PaymentGateway(Protocol):
 ### 8.7 Retention and deletion (PRD §7.10)
 
 ```python
+# shared/application/retention.py - every module that keeps personal data provides one
 class Purger(Protocol):
-    async def due(self, now: datetime, settings: RetentionSettings) -> list[PurgeTarget]: ...
-    async def purge(self, target: PurgeTarget) -> PurgeCounts: ...    # runs as app_purge role
+    key: str                                                              # "appointments.cases"
+    async def due(self, tenant_id: TenantId, until: datetime) -> list[PurgeTarget]: ...
+    async def purge(self, tenant_id: TenantId, target: PurgeTarget) -> PurgeResult: ...  # counts only
 ```
 
-`RetentionOrchestrator` runs every registered purger, skips anything blocked by RT-6 (an active appointment, a pending payment or a legal hold), and writes one `DeletionRecord` for each target. When a case is purged, the payments module **detaches** its ledger entries first (`subject_id → NULL`, health fields removed), so payment records survive (RT-7). A "delete my data" request (AP-10.8–13) calls the same purgers straight away.
+- **Daily job.** `platform/retention` declares `daily_jobs={"retention.run": 20}` (20:00 UTC). Each cron tick runs `EnsureDailyJobs`, which schedules today's run with the idempotency key `retention.run:<date>`, so repeated ticks don't add jobs. `RunRetention` loops over **every tenant × every purger** (feature modules first, so deleting patients frees contacts in the same run). It writes one `DeletionRecord` per target (ids, rule, counts, **no personal data**, append-only). A failed purge is logged, the others continue, and the job fails so it is retried. Re-running is safe: what is gone is no longer due.
+- **Purgers.**
+  - `appointments.cases` (`CasePurger`, RT-1/2/3): deletes a closed case `retention_closed_days` after closing, or an open one `retention_open_days` after its last activity. These are tenant settings, 60 and 365 days by default. It never deletes a case with a legal hold or an active appointment (RT-6). The case is re-checked under a row lock. Its appointments go, with their history and slot holds by `ON DELETE CASCADE`, then the case, then the patient once no case is left. It publishes `CasePurged`, so payments can detach ledger entries (RT-7, step 8).
+  - `contacts.dormant` (`ContactPurger`, RT-4): deletes a contact that has been quiet for 60 days **and that no row points at with a foreign key**. That is the rule: *a module keeps a contact alive by having an FK to `contacts.id`* (`patients.contact_id` does), so contacts never needs to know the module. Its rows without an FK (message log, conversation session, handovers) are removed by each module's `ContactForgotten` handler (`forget_rows_in(table)`).
+- **Purges run as `app_purge`** (`PlatformServices.purge_session_factory`), the only role allowed to delete append-only history. RLS still applies per tenant.
+- **Delete my data** (AP-10.8–13). `DELETE MY DATA` is a *flow keyword* (`Flow.keywords`), so it works from anywhere, even mid-flow. It also appears as the menu item "Delete my data". The patient picks whose data (or everyone's), sees what is deleted and that payment records stay, then confirms, which creates a `DeletionRequest`. Staff approve or reject it with a reason on the **Privacy** page. Approval cancels active appointments, runs the same `CasePurger.purge_patient`, writes the deletion record (`AP-10.11`) and confirms on WhatsApp.
+- **Dashboard**: Privacy page (requests, "deleting in the next 7 days", deletion record). The appointment detail has a Case card (close/reopen, legal hold, scheduled deletion date). Booking rules include the two retention periods.
 
 ### 8.8 Auth and permissions
 
@@ -674,5 +682,5 @@ Short ADRs live in `docs/adr/NNN-title.md`. These are the first ones:
    | R11 not a greeting | rules ignore the text, so any first message routes like a greeting |
 
 6. ✅ **Dashboard** (done 2026-10-11): requests queue, appointments by clinic-local day, detail with history and actions, settings (doctors & hours, locations, booking rules, users), staff inbox with take over / reply / hand back (real `HandoverDesk` in `platform/inbox`).
-7. **Retention and deletion:** purgers, the daily job, the `DELETE MY DATA` flow, and the cases UI.
+7. ✅ **Retention and deletion** (done 2026-10-11): `Purger` port, daily `retention.run` job, `CasePurger` (RT-1/2/3/6), `ContactPurger` (RT-4), deletion records, the `DELETE MY DATA` flow + staff approval, Privacy page and Case card (§8.7).
 8. **Phase 2:** payments (WhatsApp Payments, Razorpay links, Pay at clinic, Mark as paid/refunded), reminder templates with buttons, `LlmParser`, push real-time updates.

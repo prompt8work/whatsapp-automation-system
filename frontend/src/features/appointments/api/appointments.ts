@@ -75,3 +75,36 @@ export function useAppointmentAction(id: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: appointmentKeys.all }),
   });
 }
+
+/** The patient's cases, newest first, with each one's scheduled deletion date (AP-10.6). */
+export function usePatientCases(patientId: string) {
+  return useQuery({
+    queryKey: ["appointments", "cases", patientId] as const,
+    queryFn: () =>
+      unwrap(api.GET("/api/patients/{patient_id}/cases", { params: { path: { patient_id: patientId } } })),
+    enabled: Boolean(patientId),
+  });
+}
+
+export type CaseAction = { kind: "close"; note: string } | { kind: "reopen" } | { kind: "hold"; hold: boolean };
+
+export function useCaseAction(caseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (action: CaseAction) => {
+      const path = { params: { path: { case_id: caseId } } };
+      switch (action.kind) {
+        case "close":
+          return unwrap(api.POST("/api/cases/{case_id}/close", { ...path, body: { note: action.note } }));
+        case "reopen":
+          return unwrap(api.POST("/api/cases/{case_id}/reopen", path));
+        case "hold":
+          return unwrap(api.PUT("/api/cases/{case_id}/legal-hold", { ...path, body: { hold: action.hold } }));
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ["privacy"] });
+    },
+  });
+}

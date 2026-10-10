@@ -23,6 +23,7 @@ from app.modules.appointments.application.commands.changes import (
     UpdateDetailsCommand,
 )
 from app.modules.appointments.application.commands.decisions import DecisionCommand
+from app.modules.appointments.application.commands.deletion import DecideDeletionCommand
 from app.modules.appointments.application.commands.doctors import (
     AddDoctorCommand,
     SetWorkingHoursCommand,
@@ -41,6 +42,7 @@ from app.modules.appointments.application.queries.reads import (
     SlotsQuery,
 )
 from app.modules.appointments.application.use_cases import AppointmentsUseCases
+from app.modules.appointments.domain.deletion_request import DeletionStatus
 from app.modules.appointments.domain.status import AppointmentStatus
 from app.modules.appointments.domain.values import WorkingHours
 from app.modules.appointments.presentation.http.schemas import (
@@ -53,11 +55,13 @@ from app.modules.appointments.presentation.http.schemas import (
     BookRequest,
     CaseResponse,
     CloseCaseRequest,
+    DeletionRequestResponse,
     DoctorResponse,
     LegalHoldRequest,
     PatientResponse,
     ReasonRequest,
     RegisterPatientRequest,
+    RejectDeletionRequest,
     RenamePatientRequest,
     RescheduleRequest,
     SlotSchema,
@@ -87,6 +91,10 @@ HTTP_ERROR_STATUS = {
     "appointments.no_pending_change": status.HTTP_409_CONFLICT,
     "appointments.case_has_active_appointments": status.HTTP_409_CONFLICT,
     "appointments.case_closed": status.HTTP_409_CONFLICT,
+    "appointments.deletion_request_not_found": status.HTTP_404_NOT_FOUND,
+    "appointments.deletion_request_decided": status.HTTP_409_CONFLICT,
+    "appointments.deletion_blocked": status.HTTP_409_CONFLICT,
+    "appointments.rejection_reason_required": status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -215,7 +223,7 @@ def build_router(
     async def patient_cases(patient_id: UUID, ctx: CanRead) -> list[CaseResponse]:
         return [
             CaseResponse.from_dto(c)
-            for c in await for_tenant(ctx.tenant_id).cases_of_patient(patient_id)
+            for c in await for_tenant(ctx.tenant_id).cases_of_patient(ctx.tenant_id, patient_id)
         ]
 
     @router.post("/cases/{case_id}/close")
@@ -241,6 +249,30 @@ def build_router(
             LegalHoldCommand(case_id, body.hold, ctx.actor)
         )
         return CaseResponse.from_dto(case)
+
+    # ------------------------------------------------- deletion requests (PRD AP-10.10)
+    @router.get("/deletion-requests")
+    async def deletion_requests(
+        ctx: CanManageCases, status: DeletionStatus | None = None
+    ) -> list[DeletionRequestResponse]:
+        found = await for_tenant(ctx.tenant_id).list_deletion_requests(status)
+        return [DeletionRequestResponse.from_dto(d) for d in found]
+
+    @router.post("/deletion-requests/{request_id}/approve")
+    async def approve_deletion(request_id: UUID, ctx: CanManageCases) -> DeletionRequestResponse:
+        done = await for_tenant(ctx.tenant_id).approve_deletion(
+            DecideDeletionCommand(ctx.tenant_id, request_id, ctx.actor)
+        )
+        return DeletionRequestResponse.from_dto(done)
+
+    @router.post("/deletion-requests/{request_id}/reject")
+    async def reject_deletion(
+        request_id: UUID, body: RejectDeletionRequest, ctx: CanManageCases
+    ) -> DeletionRequestResponse:
+        rejected = await for_tenant(ctx.tenant_id).reject_deletion(
+            DecideDeletionCommand(ctx.tenant_id, request_id, ctx.actor, body.reason)
+        )
+        return DeletionRequestResponse.from_dto(rejected)
 
     # ------------------------------------------------- appointments (static paths before /{id})
     @router.get("/appointments/requests")
