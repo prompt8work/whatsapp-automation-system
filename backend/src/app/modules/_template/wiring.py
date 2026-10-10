@@ -17,7 +17,7 @@ from app.modules._template.application.use_cases import ItemUseCases
 from app.modules._template.infrastructure.unit_of_work import SqlTemplateUnitOfWork
 from app.modules._template.presentation.http.routers import build_router
 from app.modules._template.presentation.whatsapp.steps import AskItemName
-from app.platform.conversations.contracts import consent_step
+from app.platform.conversations.integration import consent_step
 from app.shared.application.conversation import Flow
 from app.shared.kernel.ids import TenantId
 from app.shared.module import PlatformServices

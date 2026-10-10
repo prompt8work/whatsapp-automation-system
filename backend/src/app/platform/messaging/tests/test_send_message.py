@@ -10,7 +10,6 @@ import pytest
 
 from app.platform.messaging.application.commands.send_message import (
     RETRY_JOB,
-    OutsideServiceWindowError,
     RetrySend,
     SendMessage,
 )
@@ -18,7 +17,7 @@ from app.platform.messaging.application.ports import SendError
 from app.platform.messaging.domain.message import Message, MessageStatus
 from app.platform.messaging.infrastructure.recording import RecordingGateway
 from app.shared.application.jobs import JobContext, ScheduleJob
-from app.shared.application.messaging import SendRequest
+from app.shared.application.messaging import OutsideServiceWindowError, SendRequest
 from app.shared.kernel.errors import NotFoundError
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.messages import Template, Text

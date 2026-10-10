@@ -115,6 +115,20 @@ class FlowEngine:
                 await self.start(ctx, session, other)
         return True
 
+    async def reprompt(self, ctx: FlowContext, session: ConversationSession) -> bool:
+        """Ask the current step's question again (R7 "Continue")."""
+        flow = self._flows.get(session.flow_key or "")
+        if flow is None or session.step_key is None:
+            return False
+        try:
+            step = flow.steps[flow.index_of(session.step_key)]
+        except KeyError:
+            return False
+        ctx.data = session.data
+        session.touch(ctx.now)
+        await step.prompt(ctx)
+        return True
+
     async def _enter(
         self, ctx: FlowContext, session: ConversationSession, flow: Flow, index: int
     ) -> None:

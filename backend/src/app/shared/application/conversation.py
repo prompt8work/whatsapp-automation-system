@@ -35,6 +35,26 @@ class ContactInfo:
     is_new: bool  # first message ever from this number (greeting rule R1)
 
 
+GREETINGS = frozenset(
+    {
+        "hi",
+        "hii",
+        "hiii",
+        "hello",
+        "helo",
+        "hey",
+        "hai",
+        "namaste",
+        "namaskar",
+        "good morning",
+        "good afternoon",
+        "good evening",
+        "hi there",
+        "hello there",
+    }
+)
+
+
 @dataclass(frozen=True)
 class InboundReply:
     text: str  # what the person typed, or the title of the button they tapped
@@ -43,7 +63,11 @@ class InboundReply:
 
     @property
     def normalized(self) -> str:
-        return " ".join(self.text.lower().split())
+        return " ".join(self.text.lower().strip(" .!?").split())
+
+    @property
+    def is_greeting(self) -> bool:
+        return self.normalized in GREETINGS
 
 
 @dataclass

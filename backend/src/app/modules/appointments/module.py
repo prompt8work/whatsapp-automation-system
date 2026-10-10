@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from app.modules.appointments.application.commands.decisions import (
     EXPIRE_REQUEST_JOB,
     EXPIRE_RESCHEDULE_JOB,
 )
 from app.modules.appointments.presentation.http.routers import HTTP_ERROR_STATUS
+from app.modules.appointments.presentation.whatsapp.notifications import NOTIFY
 from app.modules.appointments.wiring import (
+    LOCALES,
     MODULE_KEY,
+    book_flow,
     build_routers,
+    cancel_flow,
     expire_stale,
+    menu_flow,
+    new_contact_rule,
+    notify_patient,
+    reschedule_flow,
+    returning_contact_rule,
     schedule_expiry,
 )
 from app.shared.kernel.roles import Role
@@ -51,6 +58,10 @@ module = ModuleDefinition(
     event_handlers={
         "AppointmentRequested": [schedule_expiry],
         "RescheduleRequested": [schedule_expiry],
+        **{event_type: [notify_patient] for event_type in NOTIFY},
     },
-    locales_dir=Path(__file__).parent / "locales",
+    # WhatsApp (PRD §7.1): rules pick the flow for a new conversation; flows are the chats.
+    router_rules=[returning_contact_rule, new_contact_rule],
+    flows=[book_flow, menu_flow, reschedule_flow, cancel_flow],
+    locales_dir=LOCALES,
 )

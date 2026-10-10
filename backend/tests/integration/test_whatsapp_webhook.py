@@ -15,7 +15,7 @@ import psycopg
 import pytest
 from pydantic import SecretStr
 
-from app.platform.conversations.contracts import consent_step
+from app.platform.conversations.integration import consent_step
 from app.platform.messaging.infrastructure.recording import RecordingGateway
 from app.platform.messaging.integration import sign
 from app.shared.application.conversation import (

@@ -16,3 +16,8 @@ yes = "Yes, continue"
 no = "No thanks"
 declined = "No problem. Message us any time if you change your mind."
 retry = "Please tap \"Yes, continue\" or \"No thanks\"."
+
+[conversations.resume]
+ask = "Welcome back! We were in the middle of something. Continue where we left off, or start over?"
+continue = "Continue"
+restart = "Start over"

@@ -19,7 +19,11 @@ from app.platform.messaging.application.unit_of_work import MessagingUnitOfWork
 from app.platform.messaging.domain.message import Message, MessageStatus
 from app.platform.messaging.domain.repositories import CredentialStore
 from app.shared.application.jobs import JobContext, JobScheduler, ScheduleJob
-from app.shared.application.messaging import SendReceipt, SendRequest
+from app.shared.application.messaging import (
+    OutsideServiceWindowError,
+    SendReceipt,
+    SendRequest,
+)
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.errors import DomainError
 from app.shared.kernel.ids import IdGenerator, TenantId
@@ -27,10 +31,6 @@ from app.shared.kernel.messages import OutboundMessage, Template, from_content, 
 
 CUSTOMER_SERVICE_WINDOW = timedelta(hours=24)
 RETRY_JOB = "messaging.retry_send"
-
-
-class OutsideServiceWindowError(DomainError):
-    code = "messaging.outside_window"
 
 
 class MissingCredentialsError(DomainError):

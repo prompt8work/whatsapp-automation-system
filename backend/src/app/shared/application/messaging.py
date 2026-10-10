@@ -15,8 +15,16 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.shared.kernel.errors import DomainError
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.messages import OutboundMessage
+
+
+class OutsideServiceWindowError(DomainError):
+    """Free-form messages are only allowed within 24 h of the contact's last message;
+    after that only approved Templates (PRD PL-4.2)."""
+
+    code = "messaging.outside_window"
 
 
 @dataclass(frozen=True)

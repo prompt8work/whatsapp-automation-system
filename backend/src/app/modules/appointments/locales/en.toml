@@ -1,3 +1,86 @@
-# Bot sentences of the appointments module (WhatsApp flows arrive in build step 5).
+# Every WhatsApp sentence of the appointments module (ADR-010). Used as ctx.t("appointments.<key>").
+# Button titles: max 20 characters; list rows: max 24 (WhatsApp limits).
 
 [appointments]
+choose = "Choose"
+options = "Options"
+doctors = "Doctors"
+dates = "Dates"
+times = "Times"
+appointments = "Appointments"
+confirm_button = "Confirm"
+change_button = "Change"
+
+[appointments.welcome]
+new = "Welcome! 👋 I can book your appointment here in a few quick steps."
+again = "Welcome back! 👋 Let's book your appointment."
+
+[appointments.book]
+who = "Who is this appointment for?"
+someone_new = "Someone new"
+pick_patient = "Please choose a name from the list, or \"Someone new\"."
+ask_name = "What is the patient's full name?"
+bad_name = "Please send the patient's full name (at least 2 letters)."
+which_location = "Which of our clinics would you like to visit?"
+which_doctor = "Which doctor would you like to see?"
+no_doctors = "Sorry, no doctors are taking bookings right now. Someone from our team will help you here."
+which_day = "Which day suits you? These days have free times:"
+no_availability = "Sorry, there are no free times in the coming days. Someone from our team will help you here."
+day_not_understood = "Sorry, I didn't get the date. Pick one from the list, or type e.g. \"tomorrow\" or \"12 Oct\"."
+day_unavailable = "There are no free times on {day}. Please pick a day from the list."
+which_time = "Free times on {day}:"
+type_a_time = "Don't see your time? Type it, e.g. \"5:30 pm\"."
+other_day = "Another day"
+day_full = "Sorry, {day} has just filled up."
+time_unavailable = "That time isn't free. Please pick one from the list."
+ask_reason = "What is the reason for the visit? (a few words is fine)"
+ask_reason_again = "Please tell us briefly why you are coming in."
+optional_hint = " (optional - reply \"skip\" to leave it out)"
+try_again = "Let's try that again."
+summary = "Please confirm:\n👨‍⚕️ {doctor}\n🗓️ {when}\n🙂 {patient}\n📝 {reason}"
+confirm_or_change = "Please tap Confirm or Change."
+just_taken = "Sorry, someone just booked that time. Please pick another one."
+requested = "Request sent ✅ (ref {ref}). The clinic will confirm {when} with {doctor} shortly - we'll message you here."
+confirmed = "Booked ✅ {when} with {doctor}. Your reference is {ref}. Reply MENU any time to change or cancel."
+pick_from_list = "Please choose one of the options."
+
+[appointments.status]
+requested = "waiting for the clinic to confirm"
+confirmed = "confirmed"
+change_requested = "change to {when} requested"
+
+[appointments.menu]
+hello = "Hi {name}!"
+your_appointments = "Your upcoming appointments:"
+line = "• {patient} with {doctor}, {when} ({ref}) - {status}"
+no_upcoming = "You have no upcoming appointments."
+too_close = "Appointments starting soon can't be changed here - please call the clinic."
+opted_out = "(You've turned off reminders. Reply START to turn them back on.)"
+reschedule = "Reschedule"
+cancel = "Cancel"
+book = "Book appointment"
+book_another = "Book another"
+staff = "Talk to staff"
+
+[appointments.change]
+none = "There are no appointments you can change here. Reply MENU to see your options."
+which = "Which appointment?"
+confirm_move = "Move it to {when}?"
+requested = "Request sent ✅ The clinic will confirm the new time ({when}) for {ref}. Your current time stays valid until then."
+done = "Done ✅ {ref} is now on {when}."
+too_late = "It's too close to the appointment to change it here - please call the clinic."
+
+[appointments.cancel]
+confirm = "Cancel this appointment?\n{line}"
+yes = "Yes, cancel"
+no = "No, keep it"
+kept = "Okay, your appointment stays as it is."
+done = "Cancelled ✅ {ref}. Reply MENU whenever you'd like to book again."
+
+[appointments.notify]
+confirmed = "Confirmed ✅ {ref}: {when} with {doctor}. Reply MENU to change or cancel."
+declined = "Sorry, the clinic couldn't accept your request for {when} ({ref}). {reason}\nReply MENU to choose another time."
+expired = "Sorry, the clinic couldn't confirm {when} ({ref}) in time, so the slot was released. Reply MENU to book again."
+rescheduled = "Your appointment {ref} is now on {when} with {doctor}. Reply MENU if that doesn't suit you."
+reschedule_declined = "Sorry, the clinic couldn't move {ref}. Your appointment stays on {when}. {reason}"
+cancelled = "Your appointment {ref} on {when} was cancelled by the clinic. {reason}\nReply MENU to book again."

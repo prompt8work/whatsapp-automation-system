@@ -659,7 +659,20 @@ Short ADRs live in `docs/adr/NNN-title.md`. These are the first ones:
 2. ✅ **Platform foundations** (done 2026-10-10): tenancy, identity and auth, contacts, audit, outbox and dispatcher, jobs and tick, dashboard sign-in.
 3. ✅ **Messaging + conversations** (done 2026-10-10): Meta webhook and sender, message log, encrypted credentials, inbound pipeline with safety-net job, flow engine, router, global commands, TOML locales, `ConversationHarness` for flow tests, `cli simulate`.
 4. ✅ **Appointments domain + use cases** (done 2026-10-10): doctors and availability, reservations, booking and the approval queue, reschedule and cancel, cases, history, dashboard API, request expiry.
-5. **Bot rules and flows:** R1–R11, plus flow tests for every PRD acceptance criterion.
+5. ✅ **Bot rules and flows** (done 2026-10-10): appointments booking / menu / reschedule / cancel flows, greeting rules, clinic notifications to patients, flow tests over real webhooks. Where each PRD §7.1 case lives:
+
+   | Case | Implemented by |
+   |---|---|
+   | R1 new number | `NewContactRule` → `appointments.book` (welcome + consent first) |
+   | R2 active appointment, R5 waiting for the clinic, R10 too close to change | `ReturningContactRule` → `appointments.menu` (`MainMenu` shows status; Reschedule/Cancel only when allowed) |
+   | R3 all closed | same menu: "no upcoming" + Book; stored name reused |
+   | R4 several patients | `ChoosePatient` step ("Someone new" registers another patient under the number) |
+   | R6 payment due | Phase 2 (payments) |
+   | R7 flow interrupted | platform pipeline: greeting mid-flow → Continue / Start over |
+   | R8 staff handling | platform `HandoverDesk` (inbox in step 6) |
+   | R9 opted out | platform STOP/START; the menu reminds the person how to turn reminders back on |
+   | R11 not a greeting | rules ignore the text, so any first message routes like a greeting |
+
 6. **Dashboard:** auth, requests queue, appointments list, detail and timeline, settings, inbox and handover.
 7. **Retention and deletion:** purgers, the daily job, the `DELETE MY DATA` flow, and the cases UI.
 8. **Phase 2:** payments (WhatsApp Payments, Razorpay links, Pay at clinic, Mark as paid/refunded), reminder templates with buttons, `LlmParser`, push real-time updates.

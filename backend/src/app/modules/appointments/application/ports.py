@@ -16,6 +16,8 @@ class ClinicDirectory(Protocol):
 
     async def settings(self, tenant_id: TenantId) -> dict[str, Any]: ...
 
+    async def location_names(self, tenant_id: TenantId) -> dict[UUID, str]: ...
+
 
 class PatientContacts(Protocol):
     """Contacts facts. Reading a phone number is audited (it is personal data)."""

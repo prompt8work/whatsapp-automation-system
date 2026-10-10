@@ -20,11 +20,13 @@ from app.shared.application.conversation import ContactInfo, FlowContext, Inboun
 from app.shared.application.messaging import Messenger, SendRequest
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.ids import IdGenerator, TenantId
+from app.shared.kernel.messages import Buttons, Choice
 
 STOP_WORDS = {"stop", "unsubscribe"}
 START_WORDS = {"start", "subscribe"}
 MENU_WORDS = {"menu", "restart", "main menu"}
 AGENT_WORDS = {"agent", "human", "talk to staff", "talk to someone"}
+CONTINUE, RESTART = "conversations:continue", "conversations:restart"
 
 
 class HandleInboundMessage:
@@ -108,6 +110,25 @@ class HandleInboundMessage:
             session.finish(ctx.now)
             ctx.say(ctx.t("conversations.agent_requested"))
             ctx.request_handover()
+        elif ctx.reply.choice_id == RESTART:
+            session.finish(ctx.now)
+            await self._route(ctx, session)
+        elif ctx.reply.choice_id == CONTINUE:
+            if not await self._engine.reprompt(ctx, session):
+                session.finish(ctx.now)
+                await self._route(ctx, session)
+        elif session.is_active(ctx.now) and ctx.reply.is_greeting:
+            # R7: "Hi" in the middle of a flow - offer to continue instead of failing the step.
+            ctx.say(
+                Buttons(
+                    ctx.t("conversations.resume.ask"),
+                    (
+                        Choice(CONTINUE, ctx.t("conversations.resume.continue")),
+                        Choice(RESTART, ctx.t("conversations.resume.restart")),
+                    ),
+                )
+            )
+            session.touch(ctx.now)
         else:
             return False
         return True
