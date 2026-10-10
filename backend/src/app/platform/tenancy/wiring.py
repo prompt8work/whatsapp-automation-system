@@ -20,8 +20,6 @@ from app.platform.tenancy.application.queries.tenants import (
     ListLocations,
     ListTenants,
     ListWhatsAppNumbers,
-    ResolveTenantByPhoneNumberId,
-    TenantNames,
 )
 from app.platform.tenancy.application.use_cases import (
     PlatformTenancyUseCases,
@@ -61,5 +59,6 @@ def build_routers(services: PlatformServices) -> Sequence[APIRouter]:
 
 
 def build_facade(services: PlatformServices) -> TenancyFacade:
-    uow = SqlTenancyUnitOfWork(services.session_factory, tenant_id=None)
-    return TenancyFacade(TenantNames(uow), ResolveTenantByPhoneNumberId(uow))
+    return TenancyFacade(
+        lambda tenant_id: SqlTenancyUnitOfWork(services.session_factory, tenant_id), services.clock
+    )

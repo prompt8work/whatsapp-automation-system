@@ -14,8 +14,8 @@ from app.platform.contacts.contracts import (
     GrantConsentCommand,
     ResolveContactCommand,
     SetOptOutCommand,
-    contacts_for,
 )
+from app.platform.contacts.integration import contacts_for
 from app.platform.conversations.application.engine import FlowEngine, FlowRegistry, Router
 from app.platform.conversations.application.handle_inbound import HandleInboundMessage
 from app.platform.conversations.application.handle_webhook import HandleWebhook, ProcessInboundJob

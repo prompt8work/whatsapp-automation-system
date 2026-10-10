@@ -49,6 +49,9 @@ class SqlUnitOfWork:
         self._session = self._session_factory()
         self._tracked = []
         await self._session.begin()
+        # Timestamps read back in UTC whatever the server's default timezone is (ARCH §13:
+        # "store and process UTC"). Transaction-scoped, so safe behind a pooler.
+        await self._session.execute(text("SELECT set_config('TimeZone', 'UTC', true)"))
         if self._tenant_id is not None:
             await self._session.execute(
                 text("SELECT set_config('app.tenant_id', :tenant_id, true)"),

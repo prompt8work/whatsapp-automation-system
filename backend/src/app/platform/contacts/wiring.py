@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from fastapi import APIRouter
 
 from app.platform.contacts.application.commands.preferences import GrantConsent, SetOptOut
-from app.platform.contacts.application.commands.resolve_contact import ResolveContact
+from app.platform.contacts.application.commands.resolve_contact import EnsureContact, ResolveContact
 from app.platform.contacts.application.queries.contacts import GetContact, SearchContacts
 from app.platform.contacts.application.use_cases import ContactsUseCases
 from app.platform.contacts.infrastructure.unit_of_work import SqlContactsUnitOfWork
@@ -20,6 +20,7 @@ def contacts_use_cases(services: PlatformServices, tenant_id: TenantId) -> Conta
     clock, audit = services.clock, services.audit
     return ContactsUseCases(
         resolve=ResolveContact(uow, clock, services.ids),
+        ensure=EnsureContact(uow, clock, services.ids),
         grant_consent=GrantConsent(uow, clock, audit),
         set_opt_out=SetOptOut(uow, clock, audit),
         search=SearchContacts(uow, audit),

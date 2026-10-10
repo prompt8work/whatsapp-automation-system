@@ -87,6 +87,7 @@ containers = [
     "app.platform.retention",
     "app.platform.audit",
     "app.modules._template",
+    "app.modules.appointments",
     # Add every new feature module here (cookbook §11.7).
 ]
 

@@ -11,8 +11,8 @@ import pytest
 from app.platform.contacts.contracts import (
     ResolveContactCommand,
     SearchContactsQuery,
-    contacts_for,
 )
+from app.platform.contacts.integration import contacts_for
 from app.shared.kernel.actor import Actor
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.roles import Role

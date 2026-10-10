@@ -51,3 +51,36 @@ class ResolveContact:
             await uow.contacts.save(contact)
             await uow.commit()
         return ResolvedContact(ContactDTO.from_domain(contact), is_new=is_new)
+
+
+@dataclass(frozen=True)
+class EnsureContactCommand:
+    tenant_id: TenantId
+    phone: str  # any format PhoneNumber.parse accepts
+
+
+class EnsureContact:
+    """Find or create a contact WITHOUT recording an inbound message - for staff entering a
+    phone number. It must not open the 24-hour window: that person has not messaged us."""
+
+    def __init__(self, uow: ContactsUnitOfWork, clock: Clock, ids: IdGenerator) -> None:
+        self._uow, self._clock, self._ids = uow, clock, ids
+
+    async def __call__(self, cmd: EnsureContactCommand) -> ContactDTO:
+        phone = PhoneNumber.parse(cmd.phone)
+        async with self._uow as uow:
+            contact = await uow.contacts.find_by_phone(phone)
+            if contact is None:
+                contact = Contact.create(
+                    id=self._ids.new_id(),
+                    tenant_id=cmd.tenant_id,
+                    phone=phone,
+                    profile_name=None,
+                    at=self._clock.now(),
+                )
+                if not await uow.contacts.add(contact):
+                    found = await uow.contacts.find_by_phone(phone)
+                    assert found is not None
+                    contact = found
+                await uow.commit()
+        return ContactDTO.from_domain(contact)

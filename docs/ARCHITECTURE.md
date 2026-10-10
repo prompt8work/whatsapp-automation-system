@@ -412,13 +412,14 @@ module = ModuleDefinition(
 
 ### 8.3 Preventing double-booking
 
-There is a single `slot_reservations` table (`doctor_id`, `period tstzrange`, `kind` = appointment | reschedule_hold | booking_hold, `active`), protected by:
+There is a single `slot_reservations` table (`appointment_id`, `doctor_id`, `start_at`, `end_at`, `kind` = appointment | reschedule, `active`). Every booking, reschedule and reschedule hold goes through `SlotReservations.reserve()`, which:
 
-```sql
-EXCLUDE USING gist (tenant_id WITH =, doctor_id WITH =, period WITH &&) WHERE (active)
-```
+1. takes a transaction-scoped advisory lock for that doctor (`pg_advisory_xact_lock(hashtextextended('doctor:<id>', 0))`), so concurrent bookings for the same doctor run one after the other, and
+2. refuses the slot if another appointment's active reservation overlaps it (`SlotUnavailable` → the bot offers other times; the API returns 409).
 
-Two concurrent inserts for overlapping periods → the database rejects one → the repository raises `SlotUnavailable` → the bot offers other times. This handles slots of any length, and both appointments and reschedule holds (AP-2.6, AP-4.4).
+An appointment never conflicts with its own reservations, so moving it by 15 minutes works. Cancel, decline, expiry and attendance release reservations; approving a reschedule promotes the hold. This needs no PostgreSQL extension, so it runs the same on Neon/Supabase, in CI and on a local embedded PostgreSQL. It is proven by `test_two_simultaneous_bookings_for_one_slot_only_one_wins` (PRD AC-8). (The original plan was a `btree_gist` exclusion constraint; see ADR-005.)
+
+Every Unit of Work also runs `set_config('TimeZone', 'UTC', true)`, so timestamps always come back in UTC whatever the server's default timezone is.
 
 Conflicting edits to the same appointment are caught by **optimistic locking** (a `version` column). The losing request gets `ConcurrencyConflict` (409) and is asked to retry.
 
@@ -644,7 +645,7 @@ Short ADRs live in `docs/adr/NNN-title.md`. These are the first ones:
 | 002 | Manual composition root (`bootstrap/container.py`) instead of a DI framework, because it is explicit and easy to follow and change by hand |
 | 003 | Domain events double as appointment history; transactional outbox for side effects |
 | 004 | Postgres RLS with `SET LOCAL app.tenant_id` per transaction for tenant isolation |
-| 005 | `slot_reservations` with a GiST exclusion constraint for double-booking protection |
+| 005 | `slot_reservations` + per-doctor advisory lock and overlap check for double-booking protection (no `btree_gist` extension needed) |
 | 006 | Jobs table + per-minute Vercel Cron tick instead of a resident worker (fits serverless; portable) |
 | 007 | v1 dashboard "real time" = 10 s polling + focus refetch through TanStack Query; push adapter (Ably/Pusher) behind `RealtimePublisher` later |
 | 008 | Psycopg 3 + `NullPool` behind an external transaction pooler |
@@ -657,7 +658,7 @@ Short ADRs live in `docs/adr/NNN-title.md`. These are the first ones:
 1. ✅ **Skeleton** (done 2026-10-10): repo layout, tooling (uv, ruff, mypy, import-linter, Vite, ESLint), CI, `shared/kernel`, the DB session with RLS, the Alembic baseline, and the `_template` module.
 2. ✅ **Platform foundations** (done 2026-10-10): tenancy, identity and auth, contacts, audit, outbox and dispatcher, jobs and tick, dashboard sign-in.
 3. ✅ **Messaging + conversations** (done 2026-10-10): Meta webhook and sender, message log, encrypted credentials, inbound pipeline with safety-net job, flow engine, router, global commands, TOML locales, `ConversationHarness` for flow tests, `cli simulate`.
-4. **Appointments domain + use cases:** doctors and availability, reservations, booking and the approval queue, reschedule and cancel, cases, history.
+4. ✅ **Appointments domain + use cases** (done 2026-10-10): doctors and availability, reservations, booking and the approval queue, reschedule and cancel, cases, history, dashboard API, request expiry.
 5. **Bot rules and flows:** R1–R11, plus flow tests for every PRD acceptance criterion.
 6. **Dashboard:** auth, requests queue, appointments list, detail and timeline, settings, inbox and handover.
 7. **Retention and deletion:** purgers, the daily job, the `DELETE MY DATA` flow, and the cases UI.

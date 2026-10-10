@@ -2,11 +2,12 @@
 
 PLATFORM_MODULES are always present. INSTALLED_MODULES are the feature plug-ins:
 adding one = one line here (cookbook §11.7). `app.modules._template` is a copy-me example
-and is deliberately NOT installed. The appointments module is added in build step 4.
+and is deliberately NOT installed.
 """
 
 from __future__ import annotations
 
+from app.modules.appointments.module import module as appointments
 from app.platform.audit.module import module as audit
 from app.platform.contacts.module import module as contacts
 from app.platform.conversations.module import module as conversations
@@ -26,4 +27,4 @@ PLATFORM_MODULES: list[ModuleDefinition] = [
     conversations,
 ]
 
-INSTALLED_MODULES: list[ModuleDefinition] = []
+INSTALLED_MODULES: list[ModuleDefinition] = [appointments]
