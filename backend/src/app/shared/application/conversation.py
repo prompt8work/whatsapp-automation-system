@@ -151,6 +151,15 @@ class Flow:
     # Typing one of these (normalized, e.g. "delete my data") starts this flow from ANYWHERE,
     # even in the middle of another flow - like the platform's MENU / AGENT commands.
     keywords: frozenset[str] = frozenset()
+    # A tapped button whose choice id starts with one of these starts this flow from anywhere,
+    # e.g. "rem:reschedule:" on an appointment reminder (AP-5.2). The step that needs the id
+    # reads it from ctx.reply.choice_id.
+    choice_prefixes: frozenset[str] = frozenset()
+
+    def starts_on(self, word: str, choice_id: str | None) -> bool:
+        if word in self.keywords:
+            return True
+        return bool(choice_id) and any(choice_id.startswith(p) for p in self.choice_prefixes)  # type: ignore[union-attr]
 
     def index_of(self, step_key: str) -> int:
         for i, step in enumerate(self.steps):

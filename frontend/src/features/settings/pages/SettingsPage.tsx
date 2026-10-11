@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useDoctors } from "@/features/appointments";
 import { usePermission } from "@/features/auth";
+import { PaymentSettingsPanel } from "@/features/payments";
 import { ErrorText, Loading } from "@/shared/ui/Feedback";
 import { PageHeader } from "@/shared/ui/PageHeader";
 
@@ -11,17 +12,20 @@ import {
   useAddMember,
   useBookingRules,
   useLocations,
+  useMapTemplate,
   useMembers,
   useSaveBookingRules,
   useSetHours,
+  useTemplates,
   useUpdateDoctor,
 } from "../api/settings";
 import { BookingRulesForm } from "../components/BookingRulesForm";
 import { DoctorsPanel } from "../components/DoctorsPanel";
 import { LocationsPanel } from "../components/LocationsPanel";
+import { TemplatesPanel } from "../components/TemplatesPanel";
 import { UsersPanel } from "../components/UsersPanel";
 
-type Tab = "doctors" | "locations" | "rules" | "users";
+type Tab = "doctors" | "locations" | "rules" | "payments" | "templates" | "users";
 
 /** Clinic set-up (PRD AP-7.7). Tabs appear only with the matching permission. */
 export function SettingsPage() {
@@ -29,6 +33,8 @@ export function SettingsPage() {
     { id: "doctors", label: "Doctors & hours", allowed: usePermission("doctor.manage") },
     { id: "locations", label: "Locations", allowed: usePermission("locations.manage") },
     { id: "rules", label: "Booking rules", allowed: usePermission("appointment.settings.manage") },
+    { id: "payments", label: "Payments", allowed: usePermission("payment.settings.manage") },
+    { id: "templates", label: "WhatsApp templates", allowed: usePermission("templates.manage") },
     { id: "users", label: "Users", allowed: usePermission("users.manage") },
   ];
   const visible = tabs.filter((t) => t.allowed);
@@ -44,7 +50,9 @@ export function SettingsPage() {
   const addLocation = useAddLocation();
   const saveRules = useSaveBookingRules();
   const addMember = useAddMember();
-  const error = addDoctor.error ?? updateDoctor.error ?? setHours.error ?? addLocation.error ?? saveRules.error ?? addMember.error;
+  const templates = useTemplates(tab === "templates");
+  const mapTemplate = useMapTemplate();
+  const error = addDoctor.error ?? updateDoctor.error ?? setHours.error ?? addLocation.error ?? saveRules.error ?? addMember.error ?? mapTemplate.error;
 
   if (visible.length === 0) return <p className="text-sm text-slate-500">You don't have access to settings.</p>;
 
@@ -93,6 +101,17 @@ export function SettingsPage() {
       {tab === "users" &&
         (members.data ? (
           <UsersPanel members={members.data} busy={addMember.isPending} onAdd={(m) => addMember.mutate(m)} />
+        ) : (
+          <Loading />
+        ))}
+      {tab === "payments" && <PaymentSettingsPanel />}
+      {tab === "templates" &&
+        (templates.data ? (
+          <TemplatesPanel
+            slots={templates.data}
+            busy={mapTemplate.isPending}
+            onSave={(slot, template_name, language) => mapTemplate.mutate({ slot, template_name, language })}
+          />
         ) : (
           <Loading />
         ))}

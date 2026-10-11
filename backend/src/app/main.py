@@ -17,6 +17,8 @@ from app.platform.messaging.application.commands.statuses import SetCredentials
 from app.platform.messaging.presentation.http.routers import (
     build_router as build_credentials_router,
 )
+from app.platform.messaging.wiring import build_templates_router
+from app.platform.payments.wiring import build_payments_routers
 from app.shared.infrastructure.logging import configure_logging
 from app.shared.module import ModuleDefinition
 from app.shared.presentation.errors import register_error_handlers
@@ -65,6 +67,11 @@ def create_app(
     )
     app.include_router(platform.conversations.webhook_router)
     app.include_router(platform.retention.router, prefix="/api")
+    slots = [slot for module in platform.modules for slot in module.template_slots]
+    app.include_router(build_templates_router(container, slots), prefix="/api")
+    payments_router, razorpay_webhook = build_payments_routers(container.payments_core)
+    app.include_router(payments_router, prefix="/api")
+    app.include_router(razorpay_webhook)
     app.include_router(
         build_tick_router(
             container.session_factory,

@@ -27,3 +27,13 @@ export function fromWeekForm(form: DayForm[]): WorkingHours[] {
 export function weekFormErrors(form: DayForm[]): string[] {
   return form.flatMap((d, i) => (d.on && d.end <= d.start ? [`${WEEKDAYS[i]}: end must be after start`] : []));
 }
+
+export type TemplateSlot = Schemas["TemplateSlotResponse"];
+
+/** "24, 2" -> [24, 2]; blanks and junk dropped (the server checks the range). */
+export function parseHours(text: string): number[] {
+  return text
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}

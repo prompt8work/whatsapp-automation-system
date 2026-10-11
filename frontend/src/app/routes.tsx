@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { AppointmentDetailPage, AppointmentsPage } from "@/features/appointments";
 import { LoginPage, RequireAuth } from "@/features/auth";
 import { InboxPage } from "@/features/inbox";
+import { PaymentsPage } from "@/features/payments";
 import { PrivacyPage } from "@/features/privacy";
 import { RequestsPage } from "@/features/requests";
 import { SettingsPage } from "@/features/settings";
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: "appointments/:appointmentId", element: <AppointmentDetailPage /> },
       { path: "inbox", element: <InboxPage /> },
       { path: "inbox/:contactId", element: <InboxPage /> },
+      { path: "payments", element: <PaymentsPage /> },
       { path: "privacy", element: <PrivacyPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "system", element: <SystemStatusPage /> },

@@ -1,4 +1,4 @@
-import { fromWeekForm, toWeekForm, weekFormErrors } from "./settings";
+import { fromWeekForm, parseHours, toWeekForm, weekFormErrors } from "./settings";
 
 describe("weekly hours form", () => {
   it("round-trips the backend format (one block per day)", () => {
@@ -18,5 +18,13 @@ describe("weekly hours form", () => {
   it("flags days that end before they start", () => {
     const form = toWeekForm([{ weekday: 2, start: "18:00:00", end: "09:00:00" }]);
     expect(weekFormErrors(form)).toEqual(["Wed: end must be after start"]);
+  });
+});
+
+describe("reminder hours", () => {
+  it("reads a comma-separated list and drops junk", () => {
+    expect(parseHours("24, 2")).toEqual([24, 2]);
+    expect(parseHours("")).toEqual([]);
+    expect(parseHours("x, 0, 1.5")).toEqual([1.5]);
   });
 });

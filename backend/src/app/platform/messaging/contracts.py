@@ -13,6 +13,7 @@ from app.platform.messaging.domain.inbound import (
     DeliveryStatus,
     InboundKind,
     InboundMessage,
+    PaymentNotice,
     StatusUpdate,
     WebhookBatch,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "DeliveryStatus",
     "InboundKind",
     "InboundMessage",
+    "PaymentNotice",
     "RecordInboundCommand",
     "StatusUpdate",
     "WebhookBatch",

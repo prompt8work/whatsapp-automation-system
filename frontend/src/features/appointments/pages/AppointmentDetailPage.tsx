@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 
 import { usePermission } from "@/features/auth";
 import { useTimezone } from "@/features/clinic";
+import { AppointmentPaymentsPanel } from "@/features/payments";
 import { addDays, formatWhen, localDate } from "@/shared/lib/time";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
@@ -137,6 +138,7 @@ export function AppointmentDetailPage() {
         </div>
 
         <div className="space-y-4">
+          <AppointmentPaymentsPanel appointmentId={a.id} />
           {theCase && (
             <Card title="Case">
               <CaseCard

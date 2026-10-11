@@ -42,3 +42,14 @@ outbox = Table(
         postgresql_where=text("dispatched_at IS NULL"),
     ),
 )
+
+# Live dashboard updates (ARCHITECTURE §8.9): one counter per tenant and topic, bumped in the
+# same transaction as the change. The /api/live stream watches it - no polling of real tables.
+live_changes = Table(
+    "live_changes",
+    metadata,
+    Column("tenant_id", Uuid, primary_key=True),
+    Column("topic", String(40), primary_key=True),
+    Column("version", Integer, nullable=False),
+    Column("changed_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+)

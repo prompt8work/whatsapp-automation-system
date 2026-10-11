@@ -9,8 +9,8 @@ reason, fields, appointment_id, delete_patients.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -26,12 +26,14 @@ from app.modules.appointments.domain.errors import (
     ChangeCutoffPassedError,
     InvalidBookingFieldsError,
     InvalidPatientError,
+    InvalidTransitionError,
     ReasonRequiredError,
     SlotUnavailableError,
 )
 from app.modules.appointments.domain.policy import BookingPolicy, FieldType
 from app.modules.appointments.presentation.whatsapp.formatting import clock, day_label, local, when
 from app.modules.appointments.presentation.whatsapp.parsing import parse_day, parse_time
+from app.modules.appointments.presentation.whatsapp.payments import SUBJECT, money, pay_prompt
 from app.shared.application.conversation import (
     BaseStep,
     Finish,
@@ -42,17 +44,36 @@ from app.shared.application.conversation import (
     StartFlow,
     StepResult,
 )
+from app.shared.application.payments import PaymentInfo, Payments
+from app.shared.application.understanding import NoUnderstanding, Understanding
 from app.shared.kernel.actor import Actor, Channel
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.messages import Buttons, Choice, ListMenu, menu
 
-BOOK, MENU, RESCHEDULE, CANCEL, DELETE = (
+BOOK, MENU, RESCHEDULE, CANCEL, DELETE, REMINDER = (
     "appointments.book",
     "appointments.menu",
     "appointments.reschedule",
     "appointments.cancel",
     "appointments.delete_data",
+    "appointments.reminder_action",
 )
+#: Reminder buttons (AP-5.2): "rem:<action>:<appointment id>" - see reminders.py
+REM_CONFIRM, REM_RESCHEDULE, REM_CANCEL, REM_PAY = (
+    "rem:confirm:",
+    "rem:reschedule:",
+    "rem:cancel:",
+    "rem:pay:",
+)
+
+
+def _tapped(reply: InboundReply, prefix: str) -> str | None:
+    """The appointment id of a tapped reminder button with this prefix."""
+    if reply.choice_id and reply.choice_id.startswith(prefix):
+        return reply.choice_id[len(prefix) :]
+    return None
+
+
 #: Start the "delete my data" flow from anywhere (PRD AP-10.8).
 DELETE_WORDS = frozenset({"delete my data", "delete data", "erase my data", "delete my details"})
 DAYS_TO_OFFER = 10  # a WhatsApp list holds at most 10 rows
@@ -64,6 +85,8 @@ class Bot:
 
     use_cases: Callable[[TenantId], AppointmentsUseCases]
     clinic: ClinicDirectory
+    payments: Payments
+    understanding: Understanding = field(default_factory=NoUnderstanding)
 
     def uc(self, ctx: FlowContext) -> AppointmentsUseCases:
         return self.use_cases(ctx.tenant_id)
@@ -77,6 +100,32 @@ class Bot:
 
     async def timezone(self, ctx: FlowContext, location_id: UUID) -> str:
         return await self.clinic.timezone(ctx.tenant_id, location_id)
+
+    async def _ai(self, ctx: FlowContext) -> Understanding | None:
+        """The LLM, if this clinic switched it on - asked only after the rules failed."""
+        return self.understanding if (await self.policy(ctx)).ai_understanding else None
+
+    async def understand_day(self, ctx: FlowContext, text: str, today: date) -> date | None:
+        ai = await self._ai(ctx)
+        return await ai.date(text, today) if ai else None
+
+    async def understand_time(self, ctx: FlowContext, text: str) -> time | None:
+        ai = await self._ai(ctx)
+        return await ai.time(text) if ai else None
+
+    async def understand_choice(self, ctx: FlowContext, options: dict[str, str]) -> str | None:
+        ai = await self._ai(ctx)
+        return await ai.choose(ctx.reply.text, options) if ai else None
+
+    async def payments_due(self, ctx: FlowContext) -> list[tuple[AppointmentDTO, PaymentInfo]]:
+        """R6: upcoming appointments with a pending payment."""
+        upcoming = {a.id: a for a in await self.uc(ctx).upcoming_for_contact(ctx.contact.id)}
+        found = await self.payments.for_subjects(ctx.tenant_id, SUBJECT, list(upcoming))
+        return [
+            (upcoming[p.subject_id], p)
+            for p in found
+            if p.status == "pending" and p.subject_id in upcoming
+        ]
 
 
 def _actor(ctx: FlowContext) -> Actor:
@@ -309,11 +358,10 @@ class AskDay(BaseStep):
             ctx.request_handover()
             return Finish()
         picked = _pick(reply, "day")
-        day = (
-            date.fromisoformat(picked)
-            if picked
-            else parse_day(reply.text, local(ctx.now, timezone).date())
-        )
+        today = local(ctx.now, timezone).date()
+        day = date.fromisoformat(picked) if picked else parse_day(reply.text, today)
+        if day is None and not picked:
+            day = await self.bot.understand_day(ctx, reply.text, today)
         if day is None:
             return Retry("appointments.book.day_not_understood")
         if day not in days:
@@ -365,7 +413,7 @@ class AskSlot(BaseStep):
         if picked:
             chosen = next((s for s in starts if s.isoformat() == picked), None)
         else:
-            wanted = parse_time(reply.text)
+            wanted = parse_time(reply.text) or await self.bot.understand_time(ctx, reply.text)
             chosen = next(
                 (s for s in starts if wanted and local(s, timezone).time() == wanted), None
             )
@@ -561,6 +609,8 @@ class MainMenu(BaseStep):
         upcoming = await self.bot.uc(ctx).upcoming_for_contact(ctx.contact.id)
         changeable = await _changeable(self.bot, ctx)
         options = []
+        if await self.bot.payments_due(ctx):  # R6: Pay now first
+            options.append(Choice("menu:pay", ctx.t("appointments.pay.button")))
         if changeable:
             options.append(Choice("menu:reschedule", ctx.t("appointments.menu.reschedule")))
             options.append(Choice("menu:cancel", ctx.t("appointments.menu.cancel")))
@@ -580,6 +630,14 @@ class MainMenu(BaseStep):
             lines += [await _describe(self.bot, ctx, a) for a in upcoming[:5]]
             if len(await _changeable(self.bot, ctx)) < len(upcoming):
                 lines.append(ctx.t("appointments.menu.too_close"))
+            for appointment, payment in await self.bot.payments_due(ctx):
+                lines.append(
+                    ctx.t(
+                        "appointments.pay.due",
+                        amount=money(payment.amount_minor, payment.currency),
+                        ref=appointment.reference,
+                    )
+                )
         else:
             lines.append(ctx.t("appointments.menu.no_upcoming"))
         if ctx.contact.is_opted_out:
@@ -592,17 +650,34 @@ class MainMenu(BaseStep):
         options = {c.id.split(":", 1)[1]: c.title for c in await self._options(ctx)}
         picked = _pick(reply, "menu") or _match_title(reply, options)
         words = {
+            "pay": "pay",
+            "pay now": "pay",
             "book": "book",
             "reschedule": "reschedule",
             "change": "reschedule",
             "cancel": "cancel",
         }
         picked = picked or words.get(reply.normalized)
+        if picked not in options:  # "I need to move my visit" -> reschedule
+            picked = await self.bot.understand_choice(ctx, options)
         if picked not in options:
             return Retry("appointments.book.pick_from_list")
         if picked == "staff":
             ctx.say(ctx.t("conversations.agent_requested"))
             ctx.request_handover()
+            return Finish()
+        if picked == "pay":
+            for appointment, payment in (await self.bot.payments_due(ctx))[:1]:
+                ctx.say(
+                    await pay_prompt(
+                        self.bot.payments,
+                        ctx.translator,
+                        ctx.tenant_id,
+                        payment.id,
+                        payment.amount_minor,
+                        appointment.reference,
+                    )
+                )
             return Finish()
         flows = {"book": BOOK, "reschedule": RESCHEDULE, "cancel": CANCEL, "delete": DELETE}
         return StartFlow(flows[picked])
@@ -620,6 +695,11 @@ class PickAppointment(BaseStep):
         if "appointment_id" in ctx.data:
             return True
         candidates = await _changeable(self.bot, ctx)
+        tapped = _tapped(ctx.reply, REM_RESCHEDULE) or _tapped(ctx.reply, REM_CANCEL)
+        chosen = next((a for a in candidates if str(a.id) == tapped), None)
+        if chosen is not None:  # straight from the reminder button (AP-5.2)
+            self._choose(ctx, chosen)
+            return True
         if len(candidates) == 1:
             self._choose(ctx, candidates[0])
             return True
@@ -867,4 +947,57 @@ class ConfirmDeletion(BaseStep):
             )
         )
         ctx.say(ctx.t("appointments.delete.requested"))
+        return Finish()
+
+
+# =================================================================== reminder buttons (AP-5.2)
+class ReminderAction(BaseStep):
+    """Confirm / Pay now on a reminder: done at once, nothing to ask - so the step does its
+    work while deciding to skip itself, and the flow ends right away."""
+
+    key = "reminder_action"
+
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+    async def should_skip(self, ctx: FlowContext) -> bool:
+        if (appointment_id := _tapped(ctx.reply, REM_CONFIRM)) is not None:
+            await self._confirm(ctx, appointment_id)
+        elif (appointment_id := _tapped(ctx.reply, REM_PAY)) is not None:
+            await self._pay(ctx, appointment_id)
+        return True
+
+    async def _confirm(self, ctx: FlowContext, appointment_id: str) -> None:
+        upcoming = await self.bot.uc(ctx).upcoming_for_contact(ctx.contact.id)  # own only
+        a = next((a for a in upcoming if str(a.id) == appointment_id), None)
+        try:
+            if a is None:
+                raise InvalidTransitionError("not upcoming")
+            await self.bot.uc(ctx).confirm_attendance(a.id, _actor(ctx))
+        except InvalidTransitionError:
+            ctx.say(ctx.t("appointments.remind.not_booked"))
+            return
+        timezone = await self.bot.timezone(ctx, a.location_id)
+        ctx.say(ctx.t("appointments.remind.confirmed", when=when(a.slot.start, timezone)))
+
+    async def _pay(self, ctx: FlowContext, appointment_id: str) -> None:
+        for appointment, payment in await self.bot.payments_due(ctx):  # own only
+            if str(appointment.id) == appointment_id:
+                ctx.say(
+                    await pay_prompt(
+                        self.bot.payments,
+                        ctx.translator,
+                        ctx.tenant_id,
+                        payment.id,
+                        payment.amount_minor,
+                        appointment.reference,
+                    )
+                )
+                return
+        ctx.say(ctx.t("appointments.pay.nothing_due"))
+
+    async def prompt(self, ctx: FlowContext) -> None:  # never reached: always skipped
+        return None
+
+    async def handle(self, ctx: FlowContext, reply: InboundReply) -> StepResult:
         return Finish()

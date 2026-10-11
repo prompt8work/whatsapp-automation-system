@@ -21,6 +21,7 @@ from typing import Self
 from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.shared.infrastructure.live import bump, topics_for
 from app.shared.infrastructure.serialization import serialize_event
 from app.shared.infrastructure.tables import outbox
 from app.shared.kernel.entity import AggregateRoot
@@ -39,6 +40,7 @@ class SqlUnitOfWork:
         self._session: AsyncSession | None = None
         self._tracked: list[AggregateRoot] = []
         self._published: list[DomainEvent] = []
+        self._touched: set[str] = set()
 
     @property
     def session(self) -> AsyncSession:
@@ -48,7 +50,7 @@ class SqlUnitOfWork:
 
     async def __aenter__(self) -> Self:
         self._session = self._session_factory()
-        self._tracked, self._published = [], []
+        self._tracked, self._published, self._touched = [], [], set()
         await self._session.begin()
         # Timestamps read back in UTC whatever the server's default timezone is (ARCH §13:
         # "store and process UTC"). Transaction-scoped, so safe behind a pooler.
@@ -80,6 +82,10 @@ class SqlUnitOfWork:
         if aggregate not in self._tracked:
             self._tracked.append(aggregate)
 
+    def touch(self, topic: str) -> None:
+        """Tell open dashboards that `topic` changed (when no event says so) - §8.9."""
+        self._touched.add(topic)
+
     def publish(self, event: DomainEvent) -> None:
         """An event with no aggregate to carry it (e.g. a purge: the aggregate is gone)."""
         self._published.append(event)
@@ -89,12 +95,15 @@ class SqlUnitOfWork:
         for aggregate in self._tracked:
             events.extend(aggregate.pull_events())
         await self._save_events(events)
+        if self._tenant_id is not None:
+            topics = self._touched | topics_for(e.event_type for e in events)
+            await bump(self.session, self._tenant_id, topics)
         await self.session.commit()
-        self._tracked, self._published = [], []
+        self._tracked, self._published, self._touched = [], [], set()
 
     async def rollback(self) -> None:
         await self.session.rollback()
-        self._tracked, self._published = [], []
+        self._tracked, self._published, self._touched = [], [], set()
 
     async def _save_events(self, events: list[DomainEvent]) -> None:
         """Write events to the outbox. Modules with a history table extend this."""

@@ -763,6 +763,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Payments */
+        get: operations["list_payments_api_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["get_settings_api_payments_settings_get"];
+        /** Put Settings */
+        put: operations["put_settings_api_payments_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/settings/razorpay-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Secrets */
+        put: operations["put_secrets_api_payments_settings_razorpay_secrets_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/{payment_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Payment Cancel */
+        post: operations["payment_cancel_api_payments__payment_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/{payment_id}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Payment Mark Paid */
+        post: operations["payment_mark_paid_api_payments__payment_id__mark_paid_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/{payment_id}/mark-refunded": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Payment Mark Refunded */
+        post: operations["payment_mark_refunded_api_payments__payment_id__mark_refunded_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/{payment_id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Payment Refund */
+        post: operations["payment_refund_api_payments__payment_id__refund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/platform/tenants": {
         parameters: {
             query?: never;
@@ -878,6 +998,40 @@ export interface paths {
         /** List Upcoming */
         get: operations["list_upcoming_api_retention_upcoming_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_api_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/templates/{slot}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Map Template */
+        put: operations["map_template_api_templates__slot__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1071,6 +1225,11 @@ export interface components {
          */
         AppointmentSettings: {
             /**
+             * Ai Understanding
+             * @default false
+             */
+            ai_understanding: boolean;
+            /**
              * Approval Required
              * @default true
              */
@@ -1082,6 +1241,11 @@ export interface components {
              * @default 2
              */
             change_cutoff_hours: number;
+            /**
+             * Consultation Fee
+             * @default 0
+             */
+            consultation_fee: number;
             /**
              * Horizon Days
              * @default 30
@@ -1097,6 +1261,8 @@ export interface components {
              * @default true
              */
             reason_required: boolean;
+            /** Reminder Hours */
+            reminder_hours?: number[];
             /**
              * Request Expiry Hours
              * @default 4
@@ -1541,6 +1707,19 @@ export interface components {
             /** Tenant Id */
             tenant_id?: string | null;
         };
+        /** MapTemplateRequest */
+        MapTemplateRequest: {
+            /**
+             * Language
+             * @default en
+             */
+            language: string;
+            /**
+             * Template Name
+             * @default
+             */
+            template_name: string;
+        };
         /** MeResponse */
         MeResponse: {
             /** Active Tenant Id */
@@ -1609,6 +1788,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** NoteRequest */
+        NoteRequest: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
         /** OptOutRequest */
         OptOutRequest: {
             /** Opted Out */
@@ -1628,6 +1815,103 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /** PaymentResponse */
+        PaymentResponse: {
+            /** Amount Minor */
+            amount_minor: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "whatsapp_pay" | "razorpay_link" | "at_clinic";
+            /** Note */
+            note: string;
+            /** Paid At */
+            paid_at: string | null;
+            /** Pay Url */
+            pay_url: string | null;
+            /** Payer Name */
+            payer_name: string;
+            /** Payer Phone */
+            payer_phone: string;
+            /** Purpose */
+            purpose: string;
+            /** Receipt Number */
+            receipt_number: string;
+            /** Refunded At */
+            refunded_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "paid" | "failed" | "expired" | "refunded";
+            /** Subject Id */
+            subject_id: string | null;
+            /** Subject Type */
+            subject_type: string | null;
+            /** Transaction Id */
+            transaction_id: string | null;
+        };
+        /** PaymentSettingsResponse */
+        PaymentSettingsResponse: {
+            /** Methods */
+            methods?: ("whatsapp_pay" | "razorpay_link" | "at_clinic")[];
+            /**
+             * Razorpay Key Id
+             * @default
+             */
+            razorpay_key_id: string;
+            /** Razorpay Secrets Saved */
+            razorpay_secrets_saved: boolean;
+            /** Razorpay Webhook Path */
+            razorpay_webhook_path: string;
+            /**
+             * Whatsapp Pay Configuration
+             * @default
+             */
+            whatsapp_pay_configuration: string;
+        };
+        /** PaymentSettingsSchema */
+        PaymentSettingsSchema: {
+            /** Methods */
+            methods?: ("whatsapp_pay" | "razorpay_link" | "at_clinic")[];
+            /**
+             * Razorpay Key Id
+             * @default
+             */
+            razorpay_key_id: string;
+            /**
+             * Whatsapp Pay Configuration
+             * @default
+             */
+            whatsapp_pay_configuration: string;
+        };
+        /**
+         * PaymentStatus
+         * @enum {string}
+         */
+        PaymentStatus: "pending" | "paid" | "failed" | "expired" | "refunded";
+        /** RazorpaySecretsRequest */
+        RazorpaySecretsRequest: {
+            /** Key Secret */
+            key_secret: string;
+            /** Webhook Secret */
+            webhook_secret: string;
         };
         /** ReasonRequest */
         ReasonRequest: {
@@ -1731,6 +2015,23 @@ export interface components {
             slots: components["schemas"]["SlotSchema"][];
             /** Timezone */
             timezone: string;
+        };
+        /** TemplateSlotResponse */
+        TemplateSlotResponse: {
+            /** Buttons */
+            buttons: string[];
+            /** Description */
+            description: string;
+            /** Example */
+            example: string;
+            /** Language */
+            language: string | null;
+            /** Params */
+            params: string[];
+            /** Slot */
+            slot: string;
+            /** Template Name */
+            template_name: string | null;
         };
         /** TenantResponse */
         TenantResponse: {
@@ -3583,6 +3884,286 @@ export interface operations {
             };
         };
     };
+    list_payments_api_payments_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["PaymentStatus"] | null;
+                subject_id?: string[] | null;
+                subject_type?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_settings_api_payments_settings_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_settings_api_payments_settings_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentSettingsSchema"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_secrets_api_payments_settings_razorpay_secrets_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RazorpaySecretsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    payment_cancel_api_payments__payment_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    payment_mark_paid_api_payments__payment_id__mark_paid_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    payment_mark_refunded_api_payments__payment_id__mark_refunded_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    payment_refund_api_payments__payment_id__refund_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_tenants_api_platform_tenants_get: {
         parameters: {
             query?: never;
@@ -3911,6 +4492,72 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UpcomingDeletionResponse"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_api_templates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateSlotResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    map_template_api_templates__slot__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                slot: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

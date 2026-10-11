@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from pydantic import SecretStr
 
 from app.bootstrap.container import Container
+from app.bootstrap.platform import build_platform
 from app.bootstrap.settings import Settings
 from app.main import create_app
 from app.platform.identity.application.commands.create_user import CreateUserCommand
@@ -27,6 +28,7 @@ from app.platform.identity.application.commands.members import AddMemberCommand
 from app.platform.identity.application.use_cases import IdentityUseCases
 from app.platform.identity.wiring import build_identity_use_cases
 from app.platform.tenancy.wiring import build_facade
+from app.shared.application.understanding import Understanding
 from app.shared.kernel.actor import Actor
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.roles import Role
@@ -119,7 +121,11 @@ async def make_api() -> AsyncIterator[ApiFactory]:
     clients: list[httpx.AsyncClient] = []
 
     async def factory(
-        modules: Sequence[ModuleDefinition] | None = None, **settings_overrides: Any
+        modules: Sequence[ModuleDefinition] | None = None,
+        *,
+        http_client: httpx.AsyncClient | None = None,
+        understanding: Understanding | None = None,
+        **settings_overrides: Any,
     ) -> Api:
         settings = Settings(
             environment="test",
@@ -128,7 +134,10 @@ async def make_api() -> AsyncIterator[ApiFactory]:
             cron_secret=SecretStr(CRON_SECRET),
             **settings_overrides,
         )
-        app = create_app(settings, modules)
+        platform = build_platform(
+            settings, modules, http_client=http_client, understanding=understanding
+        )
+        app = create_app(settings, platform=platform)
         client = httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://testserver"
         )

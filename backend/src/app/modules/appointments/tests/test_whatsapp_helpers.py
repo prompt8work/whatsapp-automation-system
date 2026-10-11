@@ -76,6 +76,20 @@ def test_every_bot_text_key_used_in_code_exists() -> None:
         "appointments.reschedule",
         "appointments.cancel",
         "appointments.delete_data",
-    }  # flow keys
+        "appointments.reminder_action",
+        "appointments.reminder",
+        "appointments.reminder_pay",
+        "appointments.payment_due",
+        "appointments.update",
+        "appointments.send_reminder",  # job type
+    }  # flow keys and template slots
     missing = sorted(k for k in keys if not texts.has(k))
     assert missing == []
+
+
+def test_money_is_shown_the_indian_way() -> None:
+    from app.modules.appointments.presentation.whatsapp.payments import money
+
+    assert money(50000) == "₹500"
+    assert money(123456789) == "₹12,34,567.89"
+    assert money(100) == "₹1"

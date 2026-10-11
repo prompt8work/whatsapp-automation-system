@@ -230,6 +230,11 @@
       "AppointmentSettings": {
         "description": "The clinic's booking rules. Stored as the tenant's `appointments` module settings.",
         "properties": {
+          "ai_understanding": {
+            "default": false,
+            "title": "Ai Understanding",
+            "type": "boolean"
+          },
           "approval_required": {
             "default": true,
             "title": "Approval Required",
@@ -250,6 +255,13 @@
             "title": "Change Cutoff Hours",
             "type": "number"
           },
+          "consultation_fee": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Consultation Fee",
+            "type": "number"
+          },
           "horizon_days": {
             "default": 30,
             "maximum": 365.0,
@@ -268,6 +280,14 @@
             "default": true,
             "title": "Reason Required",
             "type": "boolean"
+          },
+          "reminder_hours": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "title": "Reminder Hours",
+            "type": "array"
           },
           "request_expiry_hours": {
             "default": 4,
@@ -1315,6 +1335,24 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "MapTemplateRequest": {
+        "properties": {
+          "language": {
+            "default": "en",
+            "maxLength": 10,
+            "title": "Language",
+            "type": "string"
+          },
+          "template_name": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Template Name",
+            "type": "string"
+          }
+        },
+        "title": "MapTemplateRequest",
+        "type": "object"
+      },
       "MeResponse": {
         "properties": {
           "active_tenant_id": {
@@ -1487,6 +1525,18 @@
         "title": "MessageSchema",
         "type": "object"
       },
+      "NoteRequest": {
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "title": "NoteRequest",
+        "type": "object"
+      },
       "OptOutRequest": {
         "properties": {
           "opted_out": {
@@ -1523,6 +1573,276 @@
           "full_name"
         ],
         "title": "PatientResponse",
+        "type": "object"
+      },
+      "PaymentResponse": {
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "whatsapp_pay",
+              "razorpay_link",
+              "at_clinic"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "paid_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid At"
+          },
+          "pay_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay Url"
+          },
+          "payer_name": {
+            "title": "Payer Name",
+            "type": "string"
+          },
+          "payer_phone": {
+            "title": "Payer Phone",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "receipt_number": {
+            "title": "Receipt Number",
+            "type": "string"
+          },
+          "refunded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refunded At"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "paid",
+              "failed",
+              "expired",
+              "refunded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Type"
+          },
+          "transaction_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Id"
+          }
+        },
+        "required": [
+          "id",
+          "receipt_number",
+          "subject_type",
+          "subject_id",
+          "payer_name",
+          "payer_phone",
+          "purpose",
+          "amount_minor",
+          "currency",
+          "method",
+          "status",
+          "created_at",
+          "expires_at",
+          "pay_url",
+          "transaction_id",
+          "paid_at",
+          "refunded_at",
+          "note"
+        ],
+        "title": "PaymentResponse",
+        "type": "object"
+      },
+      "PaymentSettingsResponse": {
+        "properties": {
+          "methods": {
+            "items": {
+              "enum": [
+                "whatsapp_pay",
+                "razorpay_link",
+                "at_clinic"
+              ],
+              "type": "string"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "razorpay_key_id": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Razorpay Key Id",
+            "type": "string"
+          },
+          "razorpay_secrets_saved": {
+            "title": "Razorpay Secrets Saved",
+            "type": "boolean"
+          },
+          "razorpay_webhook_path": {
+            "title": "Razorpay Webhook Path",
+            "type": "string"
+          },
+          "whatsapp_pay_configuration": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Whatsapp Pay Configuration",
+            "type": "string"
+          }
+        },
+        "required": [
+          "razorpay_secrets_saved",
+          "razorpay_webhook_path"
+        ],
+        "title": "PaymentSettingsResponse",
+        "type": "object"
+      },
+      "PaymentSettingsSchema": {
+        "properties": {
+          "methods": {
+            "items": {
+              "enum": [
+                "whatsapp_pay",
+                "razorpay_link",
+                "at_clinic"
+              ],
+              "type": "string"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "razorpay_key_id": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Razorpay Key Id",
+            "type": "string"
+          },
+          "whatsapp_pay_configuration": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Whatsapp Pay Configuration",
+            "type": "string"
+          }
+        },
+        "title": "PaymentSettingsSchema",
+        "type": "object"
+      },
+      "PaymentStatus": {
+        "enum": [
+          "pending",
+          "paid",
+          "failed",
+          "expired",
+          "refunded"
+        ],
+        "title": "PaymentStatus",
+        "type": "string"
+      },
+      "RazorpaySecretsRequest": {
+        "properties": {
+          "key_secret": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Key Secret",
+            "type": "string"
+          },
+          "webhook_secret": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Webhook Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_secret",
+          "webhook_secret"
+        ],
+        "title": "RazorpaySecretsRequest",
         "type": "object"
       },
       "ReasonRequest": {
@@ -1741,6 +2061,69 @@
           "slots"
         ],
         "title": "SlotsResponse",
+        "type": "object"
+      },
+      "TemplateSlotResponse": {
+        "properties": {
+          "buttons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Buttons",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "example": {
+            "title": "Example",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "params": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "template_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Name"
+          }
+        },
+        "required": [
+          "slot",
+          "description",
+          "params",
+          "buttons",
+          "example",
+          "template_name",
+          "language"
+        ],
+        "title": "TemplateSlotResponse",
         "type": "object"
       },
       "TenantResponse": {
@@ -5332,6 +5715,532 @@
         ]
       }
     },
+    "/api/payments": {
+      "get": {
+        "operationId": "list_payments_api_payments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PaymentStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_type",
+            "required": false,
+            "schema": {
+              "default": "appointment",
+              "title": "Subject Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PaymentResponse"
+                  },
+                  "title": "Response List Payments Api Payments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Payments",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/payments/settings": {
+      "get": {
+        "operationId": "get_settings_api_payments_settings_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "payments"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_payments_settings_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSettingsSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/payments/settings/razorpay-secrets": {
+      "put": {
+        "operationId": "put_secrets_api_payments_settings_razorpay_secrets_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RazorpaySecretsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Secrets",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/payments/{payment_id}/cancel": {
+      "post": {
+        "operationId": "payment_cancel_api_payments__payment_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Payment Cancel",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/payments/{payment_id}/mark-paid": {
+      "post": {
+        "operationId": "payment_mark_paid_api_payments__payment_id__mark_paid_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Payment Mark Paid",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/payments/{payment_id}/mark-refunded": {
+      "post": {
+        "operationId": "payment_mark_refunded_api_payments__payment_id__mark_refunded_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Payment Mark Refunded",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/payments/{payment_id}/refund": {
+      "post": {
+        "operationId": "payment_refund_api_payments__payment_id__refund_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Payment Refund",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
     "/api/platform/tenants": {
       "get": {
         "operationId": "list_tenants_api_platform_tenants_get",
@@ -5951,6 +6860,120 @@
         "summary": "List Upcoming",
         "tags": [
           "retention"
+        ]
+      }
+    },
+    "/api/templates": {
+      "get": {
+        "operationId": "list_templates_api_templates_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateSlotResponse"
+                  },
+                  "title": "Response List Templates Api Templates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Templates",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/api/templates/{slot}": {
+      "put": {
+        "operationId": "map_template_api_templates__slot__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slot",
+            "required": true,
+            "schema": {
+              "title": "Slot",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MapTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Map Template",
+        "tags": [
+          "templates"
         ]
       }
     },

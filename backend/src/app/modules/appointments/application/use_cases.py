@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from app.modules.appointments.application.commands.booking import RequestAppointment
 from app.modules.appointments.application.commands.changes import (
     CancelAppointment,
+    ConfirmAttendance,
     RecordAttendance,
     RescheduleAppointment,
     UpdateAppointmentDetails,
@@ -77,6 +78,7 @@ class AppointmentsUseCases:
     decline_reschedule: DeclineReschedule
     cancel: CancelAppointment
     record_attendance: RecordAttendance
+    confirm_attendance: ConfirmAttendance
     update_details: UpdateAppointmentDetails
     list_appointments: ListAppointments
     list_requests: ListRequests

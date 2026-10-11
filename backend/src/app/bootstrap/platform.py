@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
+import httpx
+
 from app.bootstrap.container import Container, build_container
 from app.bootstrap.modules import INSTALLED_MODULES, PLATFORM_MODULES
 from app.bootstrap.settings import Settings
@@ -16,10 +18,12 @@ from app.platform.identity.application.use_cases import IdentityUseCases
 from app.platform.identity.wiring import build_identity_use_cases
 from app.platform.inbox.wiring import InboxHandoverDesk
 from app.platform.messaging.application.ports import WhatsAppGateway
+from app.platform.payments.wiring import WhatsAppPaymentSink
 from app.platform.retention.application.use_cases import RUN_JOB as RETENTION_JOB
 from app.platform.retention.wiring import Retention, build_retention
 from app.platform.tenancy.contracts import TenancyFacade
 from app.platform.tenancy.wiring import build_facade
+from app.shared.application.understanding import Understanding
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.ids import IdGenerator
 from app.shared.module import ModuleDefinition
@@ -42,13 +46,21 @@ def build_platform(
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
     whatsapp_gateway: WhatsAppGateway | None = None,
+    http_client: httpx.AsyncClient | None = None,
+    understanding: Understanding | None = None,
 ) -> Platform:
     modules = [
         *PLATFORM_MODULES,
         *(INSTALLED_MODULES if feature_modules is None else feature_modules),
     ]
     container = build_container(
-        settings, modules, clock=clock, ids=ids, whatsapp_gateway=whatsapp_gateway
+        settings,
+        modules,
+        clock=clock,
+        ids=ids,
+        whatsapp_gateway=whatsapp_gateway,
+        http_client=http_client,
+        understanding=understanding,
     )
     tenancy = build_facade(container)
     identity = build_identity_use_cases(
@@ -67,6 +79,7 @@ def build_platform(
         app_secret=settings.meta_app_secret.get_secret_value(),
         require_signature=not settings.is_local,
         handover=InboxHandoverDesk(container),
+        payments=WhatsAppPaymentSink(container.payments_core),
     )
     container.job_handlers.register(PROCESS_JOB, conversations.process_job)
     retention = build_retention(container, modules)

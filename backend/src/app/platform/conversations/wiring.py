@@ -19,7 +19,7 @@ from app.platform.contacts.integration import contacts_for
 from app.platform.conversations.application.engine import FlowEngine, FlowRegistry, Router
 from app.platform.conversations.application.handle_inbound import HandleInboundMessage
 from app.platform.conversations.application.handle_webhook import HandleWebhook, ProcessInboundJob
-from app.platform.conversations.application.ports import HandoverDesk
+from app.platform.conversations.application.ports import HandoverDesk, PaymentNoticeSink
 from app.platform.conversations.infrastructure.handover import LoggingHandoverDesk
 from app.platform.conversations.infrastructure.sql import SqlConversationsUnitOfWork
 from app.platform.conversations.infrastructure.translator import TomlTranslator
@@ -117,6 +117,7 @@ def build_conversations(
     app_secret: str,
     require_signature: bool,
     handover: HandoverDesk | None = None,
+    payments: PaymentNoticeSink | None = None,
 ) -> Conversations:
     flows = FlowRegistry()
     rules: list[RouterRule] = []
@@ -143,7 +144,9 @@ def build_conversations(
         services.clock,
         services.ids,
     )
-    handle = HandleWebhook(tenants, contacts, inbound, pipeline, services.jobs, services.clock)
+    handle = HandleWebhook(
+        tenants, contacts, inbound, pipeline, services.jobs, services.clock, payments
+    )
     return Conversations(
         webhook_router=build_router(
             handle,

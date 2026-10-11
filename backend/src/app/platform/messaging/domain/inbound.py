@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -42,6 +42,19 @@ class StatusUpdate:
 
 
 @dataclass(frozen=True)
+class PaymentNotice:
+    """A WhatsApp Payments result (PRD PL-6.1 A) - Meta sends it as a status of type "payment"."""
+
+    phone_number_id: str
+    reference_id: str  # the OrderDetails.reference_id we sent
+    status: str  # "captured" (paid) | "failed" | "pending"
+    transaction_id: str | None
+    amount_minor: int | None
+    at: datetime
+
+
+@dataclass(frozen=True)
 class WebhookBatch:
     messages: list[InboundMessage]
     statuses: list[StatusUpdate]
+    payments: list[PaymentNotice] = field(default_factory=list)

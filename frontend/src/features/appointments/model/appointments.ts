@@ -45,6 +45,7 @@ const EVENT_LABELS: Record<string, string> = {
   RescheduleDeclined: "Reschedule declined",
   AppointmentCompleted: "Completed",
   AppointmentNoShow: "No-show",
+  AttendanceConfirmed: "Patient confirmed they will come",
   AppointmentDetailsUpdated: "Details updated",
 };
 

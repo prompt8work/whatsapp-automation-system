@@ -103,7 +103,45 @@ class Template:
         return f"[template {self.name}] " + " | ".join(self.body_params)
 
 
-OutboundMessage = Text | Buttons | ListMenu | Template
+@dataclass(frozen=True)
+class LinkButton:
+    """One button that opens a URL (WhatsApp "CTA URL"), e.g. a Razorpay payment link."""
+
+    body: str
+    title: str
+    url: str
+
+    def __post_init__(self) -> None:
+        _check(0 < len(self.body) <= MAX_BODY, f"Body must be 1-{MAX_BODY} characters")
+        _check(0 < len(self.title) <= MAX_BUTTON_TITLE, f"Button title over {MAX_BUTTON_TITLE}")
+        _check(self.url.startswith("https://"), "Links must be https")
+
+    def as_text(self) -> str:
+        return f"{self.body}\n[{self.title}] {self.url}"
+
+
+@dataclass(frozen=True)
+class OrderDetails:
+    """WhatsApp Payments "Review and pay" message (India, UPI). `configuration` is the payment
+    configuration name the clinic set up in WhatsApp Business Manager (PRD PL-6.1 A)."""
+
+    body: str
+    reference_id: str  # comes back in the payment webhook
+    configuration: str
+    item_name: str
+    amount_minor: int  # paise
+    currency: str = "INR"
+
+    def __post_init__(self) -> None:
+        _check(0 < len(self.body) <= MAX_BODY, f"Body must be 1-{MAX_BODY} characters")
+        _check(self.amount_minor > 0, "Amount must be positive")
+        _check(0 < len(self.reference_id) <= 35, "reference_id must be 1-35 characters")
+
+    def as_text(self) -> str:
+        return f"{self.body}\n[Review and pay {self.amount_minor / 100:.2f} {self.currency}]"
+
+
+OutboundMessage = Text | Buttons | ListMenu | Template | LinkButton | OrderDetails
 
 
 def menu(body: str, choices: list[Choice], *, button: str = "Choose") -> OutboundMessage:
@@ -131,6 +169,10 @@ def from_content(content: dict[str, Any]) -> OutboundMessage:
         return Template(
             p["name"], p["language"], tuple(p["body_params"]), tuple(p["button_payloads"])
         )
+    if kind == "LinkButton":
+        return LinkButton(p["body"], p["title"], p["url"])
+    if kind == "OrderDetails":
+        return OrderDetails(**p)
     raise InvalidMessageError(f"Unknown message kind {kind!r}")
 
 

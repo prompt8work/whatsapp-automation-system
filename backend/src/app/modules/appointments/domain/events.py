@@ -88,6 +88,11 @@ class AppointmentNoShow(AppointmentEvent):
 
 
 @dataclass(frozen=True, kw_only=True)
+class AttendanceConfirmed(AppointmentEvent):
+    """The patient tapped "Confirm" on a reminder (AP-5.1). History only - no status change."""
+
+
+@dataclass(frozen=True, kw_only=True)
 class AppointmentDetailsUpdated(AppointmentEvent):
     changed: tuple[str, ...]  # field names only (values may be personal data)
 
@@ -139,6 +144,7 @@ class CasePurged(DomainEvent):
     patient_id: UUID
     patient_deleted: bool
     rule: str
+    appointment_ids: tuple[UUID, ...] = ()  # gone too; payments keep their ledger (RT-7)
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -10,5 +10,7 @@ from app.shared.module import ModuleDefinition
 module = ModuleDefinition(
     key="messaging",
     http_error_status=HTTP_ERROR_STATUS,
+    permissions={"templates.manage": "Choose the WhatsApp templates used outside the 24 h window"},
+    role_grants={},  # admin only
     event_handlers={CONTACT_FORGOTTEN: [forget_rows_in(messages)]},  # retention RT-4
 )

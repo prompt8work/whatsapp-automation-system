@@ -107,15 +107,16 @@ class SendMessage:
         in_window = (
             cmd.last_inbound_at is not None and now - cmd.last_inbound_at < CUSTOMER_SERVICE_WINDOW
         )
-        if not in_window and not isinstance(cmd.message, Template):
-            raise OutsideServiceWindowError("Only templates can be sent 24 h after the last reply")
+        outbound = cmd.message
+        if not in_window and not isinstance(outbound, Template):
+            outbound = await self._template_for(cmd)
 
         message = Message.outbound(
             id=self._ids.new_id(),
             tenant_id=cmd.tenant_id,
             contact_id=cmd.contact_id,
             phone_number_id=cmd.phone_number_id,
-            content=to_content(cmd.message),
+            content=to_content(outbound),
             at=now,
         )
         message.meta["to"] = cmd.to
@@ -123,8 +124,26 @@ class SendMessage:
             await uow.messages.add(message)
             await uow.commit()
 
-        await self._delivery.deliver(message, cmd.message, schedule_retry=True)
+        await self._delivery.deliver(message, outbound, schedule_retry=True)
         return SendReceipt(message.id, sent=message.status is MessageStatus.SENT)
+
+    async def _template_for(self, cmd: SendRequest) -> Template:
+        """Outside the window: the clinic's template for the request's fallback slot."""
+        mapping = None
+        if cmd.fallback is not None:
+            async with self._uow as uow:
+                mapping = await uow.templates.get(cmd.fallback.slot)
+        if cmd.fallback is None or mapping is None:
+            raise OutsideServiceWindowError(
+                "Only templates can be sent 24 h after the last reply"
+                + (f" - map one to {cmd.fallback.slot!r}" if cmd.fallback else "")
+            )
+        return Template(
+            mapping.name,
+            mapping.language,
+            cmd.fallback.params,
+            cmd.fallback.button_payloads,
+        )
 
 
 class RetrySend:

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/shared/api/client";
-import { unwrap } from "@/shared/api/call";
+import { unwrap, unwrapEmpty } from "@/shared/api/call";
 import type { Schemas } from "@/shared/api/types";
 
 import type { BookingRules, WorkingHours } from "../model/settings";
@@ -58,3 +58,17 @@ export const useSaveBookingRules = () =>
 
 export const useAddMember = () =>
   useSave((body: Schemas["AddMemberRequest"]) => unwrap(api.POST("/api/users", { body })), keys.members);
+
+const templateKeys = ["settings", "templates"] as const;
+
+/** Template slots and the clinic's approved template for each (PRD PL-4.2). */
+export function useTemplates(enabled = true) {
+  return useQuery({ queryKey: templateKeys, queryFn: () => unwrap(api.GET("/api/templates")), enabled });
+}
+
+export const useMapTemplate = () =>
+  useSave(
+    ({ slot, ...body }: { slot: string; template_name: string; language: string }) =>
+      unwrapEmpty(api.PUT("/api/templates/{slot}", { params: { path: { slot } }, body })),
+    templateKeys,
+  );

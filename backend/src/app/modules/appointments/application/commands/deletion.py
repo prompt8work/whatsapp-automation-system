@@ -24,6 +24,7 @@ from app.modules.appointments.domain.deletion_request import DeletionRequest, De
 from app.modules.appointments.domain.errors import DeletionBlockedError, InvalidPatientError
 from app.modules.appointments.domain.repositories import AppointmentFilter
 from app.modules.appointments.domain.status import ACTIVE
+from app.shared.application.payments import Payments
 from app.shared.application.retention import PurgeTarget
 from app.shared.kernel.actor import Actor, Channel
 from app.shared.kernel.clock import Clock
@@ -119,25 +120,29 @@ class ApproveDeletion:
         cancel: CancelAppointment,
         eraser: PatientEraser,
         record: DeletionRecorder,
+        payments: Payments,
         clock: Clock,
     ) -> None:
         self._uow, self._cancel, self._eraser = uow, cancel, eraser
-        self._record, self._clock = record, clock
+        self._record, self._payments, self._clock = record, payments, clock
 
     async def __call__(self, cmd: DecideDeletionCommand) -> DeletionRequestDTO:
         async with self._uow as uow:
             request = await uow.deletion_requests.get(cmd.request_id)
             request.ensure_pending()
             active: list[UUID] = []
+            finished: list[UUID] = []
             for patient_id in request.patient_ids:
                 if any(c.legal_hold for c in await uow.cases.for_patient(patient_id)):
                     raise DeletionBlockedError(
                         "A case of this patient is on legal hold - lift it or reject the request"
                     )
-                found = await uow.appointments.search(
-                    AppointmentFilter(patient_id=patient_id, statuses=ACTIVE)
-                )
-                active += [a.id for a in found]
+                for a in await uow.appointments.search(AppointmentFilter(patient_id=patient_id)):
+                    (active if a.status in ACTIVE else finished).append(a.id)
+        if await self._payments.unsettled(cmd.tenant_id, "appointment", finished):
+            raise DeletionBlockedError(  # RT-6: money is owed for a past visit
+                "A payment is still pending - mark it paid or cancel it on the Payments page"
+            )
 
         for appointment_id in active:  # frees the slots; patient is told in the confirmation
             await self._cancel(
@@ -149,6 +154,9 @@ class ApproveDeletion:
                     "Deleted at the patient's request",
                 )
             )
+
+        # Nothing is due for appointments that will not happen (PL-6.5) - and RT-6 must pass.
+        await self._payments.expire(cmd.tenant_id, "appointment", active, cmd.actor)
 
         counts: dict[str, int] = {"cancelled_appointments": len(active)}
         for patient_id in request.patient_ids:

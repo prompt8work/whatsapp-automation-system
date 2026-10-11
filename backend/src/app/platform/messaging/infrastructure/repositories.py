@@ -5,13 +5,18 @@ from typing import Any
 from uuid import UUID
 
 from cryptography.fernet import Fernet
-from sqlalchemy import RowMapping, func, select, update
+from sqlalchemy import RowMapping, delete, func, select, update
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.platform.messaging.application.queries.messages import MessageView
 from app.platform.messaging.domain.message import Direction, Message, MessageStatus
-from app.platform.messaging.infrastructure.tables import messages, whatsapp_credentials
+from app.platform.messaging.domain.templates import TemplateMapping
+from app.platform.messaging.infrastructure.tables import (
+    messages,
+    template_mappings,
+    whatsapp_credentials,
+)
 from app.shared.application.unit_of_work import UnitOfWork
 from app.shared.infrastructure.unit_of_work import SqlUnitOfWork
 from app.shared.kernel.errors import NotFoundError
@@ -76,10 +81,14 @@ class SqlMessageRepository:
             )
             .returning(messages.c.id)
         )
-        return result.scalar_one_or_none() is not None
+        stored = result.scalar_one_or_none() is not None
+        if stored:
+            self._uow.touch("inbox")
+        return stored
 
     async def add(self, message: Message) -> None:
         await self._session.execute(insert(messages).values(_row(message)))
+        self._uow.touch("inbox")
 
     async def find_by_wa_id(self, wa_message_id: str) -> Message | None:
         row = (
@@ -97,6 +106,7 @@ class SqlMessageRepository:
         await self._session.execute(
             update(messages).where(messages.c.id == message.id).values(_row(message))
         )
+        self._uow.touch("inbox")
 
 
 class SqlCredentialStore:
@@ -198,3 +208,39 @@ class SqlMessageReadModel:
         async with SqlUnitOfWork(self._session_factory, self._tenant_id) as uow:
             rows = await uow.session.execute(stmt)
             return {r.contact_id: r.at for r in rows}
+
+
+class SqlTemplateMappings:
+    def __init__(self, session: AsyncSession, tenant_id: TenantId | None) -> None:
+        self._session, self._tenant_id = session, tenant_id
+
+    async def get(self, slot: str) -> TemplateMapping | None:
+        row = (
+            (
+                await self._session.execute(
+                    select(template_mappings).where(template_mappings.c.slot == slot)
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        return TemplateMapping(row["slot"], row["name"], row["language"]) if row else None
+
+    async def list(self) -> list[TemplateMapping]:
+        rows = (await self._session.execute(select(template_mappings))).mappings()
+        return [TemplateMapping(r["slot"], r["name"], r["language"]) for r in rows]
+
+    async def put(self, mapping: TemplateMapping) -> None:
+        values = {"name": mapping.name, "language": mapping.language}
+        await self._session.execute(
+            insert(template_mappings)
+            .values(tenant_id=self._tenant_id, slot=mapping.slot, **values)
+            .on_conflict_do_update(
+                index_elements=["tenant_id", "slot"], set_=values | {"updated_at": func.now()}
+            )
+        )
+
+    async def delete(self, slot: str) -> None:
+        await self._session.execute(
+            delete(template_mappings).where(template_mappings.c.slot == slot)
+        )

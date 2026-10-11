@@ -22,7 +22,7 @@ export function useAppointments(on: string, status: string) {
           params: { query: { on, ...(status ? { status: [status as Status] } : {}) } },
         }),
       ),
-    refetchInterval: 15_000,
+    refetchInterval: 60_000, // live updates (§8.9); polling is the fallback
   });
 }
 

@@ -14,7 +14,12 @@ from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID
 
-from app.platform.conversations.application.ports import ContactGateway, InboundLog, TenantResolver
+from app.platform.conversations.application.ports import (
+    ContactGateway,
+    InboundLog,
+    PaymentNoticeSink,
+    TenantResolver,
+)
 from app.platform.messaging.contracts import InboundMessage, WebhookBatch
 from app.platform.tenancy.contracts import TenantRoute
 from app.shared.application.conversation import ContactInfo
@@ -35,6 +40,7 @@ class WebhookReport:
     unknown_number: int = 0
     failed: int = 0
     statuses: int = 0
+    payments: int = 0
 
 
 def _safety_key(message_id: UUID) -> str:
@@ -50,9 +56,11 @@ class HandleWebhook:
         process: ProcessMessage,
         jobs: JobScheduler,
         clock: Clock,
+        payments: PaymentNoticeSink | None = None,
     ) -> None:
         self._tenants, self._contacts, self._inbound = tenants, contacts, inbound
         self._process, self._jobs, self._clock = process, jobs, clock
+        self._payments = payments
 
     async def __call__(self, batch: WebhookBatch) -> WebhookReport:
         report = WebhookReport()
@@ -61,6 +69,12 @@ class HandleWebhook:
             if route is not None:
                 await self._inbound.record_status(route.tenant_id, update)
                 report.statuses += 1
+
+        for notice in batch.payments:
+            route = await self._tenants.resolve(notice.phone_number_id)
+            if route is not None and self._payments is not None:
+                await self._payments.apply(route.tenant_id, notice)
+                report.payments += 1
 
         for message in batch.messages:
             route = await self._tenants.resolve(message.phone_number_id)

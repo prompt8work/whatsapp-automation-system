@@ -149,6 +149,22 @@ class RecordAttendance:
         return AppointmentDTO.from_domain(appointment)
 
 
+class ConfirmAttendance:
+    """The patient tapped "Confirm" on a reminder (AP-5.1): a history entry, no status change."""
+
+    def __init__(self, uow: AppointmentsUnitOfWork, clock: Clock) -> None:
+        self._uow, self._clock = uow, clock
+
+    async def __call__(self, appointment_id: UUID, actor: Actor) -> AppointmentDTO:
+        by = By(actor, Channel.WHATSAPP, self._clock.now())
+        async with self._uow as uow:
+            appointment = await uow.appointments.get(appointment_id)
+            appointment.confirm_attendance(by)
+            await uow.appointments.save(appointment)
+            await uow.commit()
+        return AppointmentDTO.from_domain(appointment)
+
+
 @dataclass(frozen=True)
 class UpdateDetailsCommand:
     tenant_id: TenantId

@@ -72,6 +72,9 @@ class BookingPolicy:
     horizon_days: int = 30
     retention_closed: timedelta = timedelta(days=60)  # RT-1
     retention_open: timedelta = timedelta(days=365)  # RT-2
+    fee_minor: int = 0  # consultation fee in paise, asked for after confirmation (§7.5)
+    reminders: tuple[timedelta, ...] = (timedelta(hours=24), timedelta(hours=2))  # PL-7.2
+    ai_understanding: bool = False  # clinic opted in to LLM parsing of free text
     booking_fields: tuple[BookingField, ...] = field(default=())
 
     @classmethod
@@ -86,6 +89,11 @@ class BookingPolicy:
             horizon_days=int(settings.get("horizon_days", d.horizon_days)),
             retention_closed=timedelta(days=int(settings.get("retention_closed_days", 60))),
             retention_open=timedelta(days=int(settings.get("retention_open_days", 365))),
+            fee_minor=round(float(settings.get("consultation_fee", 0)) * 100),
+            ai_understanding=bool(settings.get("ai_understanding", False)),
+            reminders=tuple(
+                timedelta(hours=float(h)) for h in settings.get("reminder_hours", (24, 2))
+            ),
             booking_fields=tuple(
                 BookingField(
                     key=f["key"],

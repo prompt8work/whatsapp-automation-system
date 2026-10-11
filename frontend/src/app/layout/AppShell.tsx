@@ -4,6 +4,8 @@ import { SessionMenu, usePermission } from "@/features/auth";
 import { useDeletionRequests } from "@/features/privacy";
 import { useRequests } from "@/features/requests";
 
+import { useLiveUpdates } from "./useLiveUpdates";
+
 function RequestsLink() {
   const requests = useRequests();
   const count = requests.data?.length ?? 0;
@@ -28,12 +30,14 @@ function PrivacyLink() {
 }
 
 export function AppShell() {
+  useLiveUpdates();
   const canManageDoctors = usePermission("doctor.manage");
   const canManageUsers = usePermission("users.manage");
   const nav = [
     { to: "/requests", label: <RequestsLink />, show: usePermission("appointment.approve") },
     { to: "/appointments", label: "Appointments", show: usePermission("appointment.read") },
     { to: "/inbox", label: "Inbox", show: usePermission("inbox.read") },
+    { to: "/payments", label: "Payments", show: usePermission("payment.read") },
     { to: "/privacy", label: <PrivacyLink />, show: usePermission("retention.read") },
     {
       to: "/settings",

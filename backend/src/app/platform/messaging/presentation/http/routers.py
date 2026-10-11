@@ -19,6 +19,7 @@ HTTP_ERROR_STATUS = {
     "messaging.invalid_message": status.HTTP_422_UNPROCESSABLE_CONTENT,
     "messaging.outside_window": status.HTTP_409_CONFLICT,
     "messaging.no_credentials": status.HTTP_409_CONFLICT,
+    "messaging.unknown_slot": status.HTTP_404_NOT_FOUND,
 }
 
 

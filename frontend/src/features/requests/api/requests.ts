@@ -9,7 +9,7 @@ export function useRequests() {
   return useQuery({
     queryKey: requestKeys.all,
     queryFn: () => unwrap(api.GET("/api/appointments/requests")),
-    refetchInterval: 10_000, // ADR-007: near-real-time by polling
+    refetchInterval: 60_000, // live updates refresh it at once; polling is the fallback
   });
 }
 

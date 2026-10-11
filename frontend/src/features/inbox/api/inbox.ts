@@ -12,7 +12,7 @@ export function useConversations() {
   return useQuery({
     queryKey: inboxKeys.all,
     queryFn: () => unwrap(api.GET("/api/inbox")),
-    refetchInterval: 10_000,
+    refetchInterval: 60_000, // live updates (§8.9); polling is the fallback
   });
 }
 
@@ -21,7 +21,7 @@ export function useConversation(contactId: string) {
     queryKey: inboxKeys.conversation(contactId),
     queryFn: () => unwrap(api.GET("/api/inbox/{contact_id}", { params: { path: { contact_id: contactId } } })),
     enabled: Boolean(contactId),
-    refetchInterval: 5_000,
+    refetchInterval: 60_000,
   });
 }
 

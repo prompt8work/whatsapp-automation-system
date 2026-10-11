@@ -6,8 +6,10 @@ One case at a time, in its own transaction:
 The contact is NOT touched here: once no patient points at it, the contacts purger (RT-4)
 takes it when it has been quiet for 60 days.
 
-Never purged (RT-6): a case on legal hold or with an active appointment. Everything is
-re-checked under a row lock, so a case reopened since `due` is left alone.
+Never purged (RT-6): a case on legal hold, with an active appointment, or with a PENDING payment
+(asked from payments). Everything is re-checked under a row lock, so a case reopened since
+`due` is left alone. Payments themselves are never deleted: CasePurged carries the appointment
+ids, and payments detach their records into the ledger (RT-7).
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from app.modules.appointments.infrastructure.tables import (
     cases,
     patients,
 )
+from app.shared.application.payments import Payments
 from app.shared.application.retention import PurgeResult, PurgeTarget
 from app.shared.infrastructure.unit_of_work import SqlUnitOfWork
 from app.shared.kernel.clock import Clock
@@ -63,8 +66,26 @@ class CasePurger:
         purge_sessions: async_sessionmaker[AsyncSession],
         settings: SettingsReader,
         clock: Clock,
+        payments: Payments,
     ) -> None:
         self._sessions, self._settings, self._clock = purge_sessions, settings, clock
+        self._payments = payments
+
+    async def _unpaid_cases(self, tenant_id: TenantId, case_ids: list[UUID]) -> set[UUID]:
+        """RT-6: cases with an appointment whose payment is still PENDING."""
+        if not case_ids:
+            return set()
+        async with SqlUnitOfWork(self._sessions, tenant_id) as uow:
+            rows = (
+                await uow.session.execute(
+                    select(appointments.c.id, appointments.c.case_id).where(
+                        appointments.c.case_id.in_(case_ids)
+                    )
+                )
+            ).all()
+        case_of = {r.id: r.case_id for r in rows}
+        unpaid = await self._payments.unsettled(tenant_id, "appointment", list(case_of))
+        return {case_of[a] for a in unpaid}
 
     async def _policy(self, tenant_id: TenantId) -> BookingPolicy:
         return BookingPolicy.from_settings(await self._settings(tenant_id))
@@ -79,6 +100,7 @@ class CasePurger:
         )
         async with SqlUnitOfWork(self._sessions, tenant_id) as uow:
             rows = (await uow.session.execute(stmt)).all()
+        unpaid = await self._unpaid_cases(tenant_id, [r.id for r in rows])
         return [
             PurgeTarget(
                 "case",
@@ -88,6 +110,7 @@ class CasePurger:
                 label=r.full_name,
             )
             for r in rows
+            if r.id not in unpaid
         ]
 
     async def purge(self, tenant_id: TenantId, target: PurgeTarget) -> PurgeResult:
@@ -122,6 +145,8 @@ class CasePurger:
     async def _purge_case(
         self, tenant_id: TenantId, case_id: UUID, rule: str, still_due: Any | None
     ) -> PurgeResult:
+        if await self._unpaid_cases(tenant_id, [case_id]):
+            return PurgeResult()  # RT-6: a payment is still pending
         async with SqlUnitOfWork(self._sessions, tenant_id) as uow:
             s = uow.session
             conditions = [cases.c.id == case_id, not_(cases.c.legal_hold), _no_active]
@@ -144,7 +169,7 @@ class CasePurger:
                 .where(appointments.c.case_id == case_id)
                 .returning(appointments.c.id)
             )
-            n_appointments = len(gone.all())
+            appointment_ids = tuple(r.id for r in gone.all())
             await s.execute(delete(cases).where(cases.c.id == case_id))
             n_patients = await self._delete_patient_if_free(uow, patient_id)
             uow.publish(
@@ -154,13 +179,14 @@ class CasePurger:
                     patient_id=patient_id,
                     patient_deleted=bool(n_patients),
                     rule=rule,
+                    appointment_ids=appointment_ids,
                 )
             )
             await uow.commit()
         return PurgeResult(
             {
                 "cases": 1,
-                "appointments": n_appointments,
+                "appointments": len(appointment_ids),
                 "history_events": int(events or 0),
                 "patients": n_patients,
             }

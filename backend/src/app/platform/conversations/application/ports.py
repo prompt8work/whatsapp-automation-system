@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from app.platform.messaging.contracts import InboundMessage, StatusUpdate
+from app.platform.messaging.contracts import InboundMessage, PaymentNotice, StatusUpdate
 from app.platform.tenancy.contracts import TenantRoute
 from app.shared.application.conversation import ContactInfo
 from app.shared.kernel.ids import TenantId
@@ -48,3 +48,9 @@ class HandoverDesk(Protocol):
     async def is_active(self, tenant_id: TenantId, contact_id: UUID) -> bool: ...
 
     async def request(self, tenant_id: TenantId, contact_id: UUID, reason: str) -> None: ...
+
+
+class PaymentNoticeSink(Protocol):
+    """WhatsApp Payments results arrive on the WhatsApp webhook; payments records them."""
+
+    async def apply(self, tenant_id: TenantId, notice: PaymentNotice) -> None: ...

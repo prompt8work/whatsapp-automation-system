@@ -6,7 +6,7 @@ from datetime import date, datetime, time
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, field_validator
 
 from app.modules.appointments.application.dto import (
     AppointmentDetailDTO,
@@ -41,6 +41,21 @@ class AppointmentSettings(BaseModel):
     # N days after their last activity (RT-2).
     retention_closed_days: int = Field(default=60, ge=1, le=3650)
     retention_open_days: int = Field(default=365, ge=30, le=3650)
+    # Payments (PRD §7.5): asked for once an appointment is confirmed. 0 = no payment.
+    consultation_fee: float = Field(default=0, ge=0, le=1_000_000)
+    # Reminders (PL-7.2): hours before the appointment, e.g. [24, 2]. Empty = no reminders.
+    # Let an AI model read free-typed dates, times and menu requests the rules don't get.
+    # Only the message text is sent (to Anthropic). Off unless the clinic switches it on.
+    ai_understanding: bool = False
+    reminder_hours: list[float] = Field(default_factory=lambda: [24.0, 2.0], max_length=3)
+
+    @field_validator("reminder_hours")
+    @classmethod
+    def _sane_hours(cls, hours: list[float]) -> list[float]:
+        if any(not 0.25 <= h <= 168 for h in hours):
+            raise ValueError("Reminder times must be between 15 minutes and 7 days before")
+        return sorted(set(hours), reverse=True)
+
     booking_fields: list[BookingFieldSchema] = Field(default_factory=list, max_length=10)
 
 

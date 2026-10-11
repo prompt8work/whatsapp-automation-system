@@ -22,8 +22,10 @@ from app.shared.application.audit import AuditLogger
 from app.shared.application.conversation import Flow, RouterRule
 from app.shared.application.events import EventHandler
 from app.shared.application.jobs import JobHandler, JobScheduler
-from app.shared.application.messaging import Messenger
+from app.shared.application.messaging import Messenger, TemplateSlot
+from app.shared.application.payments import Payments
 from app.shared.application.retention import Purger
+from app.shared.application.understanding import Understanding
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.ids import IdGenerator
 from app.shared.kernel.roles import Role
@@ -49,6 +51,14 @@ class PlatformServices(Protocol):
 
     @property
     def messenger(self) -> Messenger: ...
+
+    @property
+    def payments(self) -> Payments: ...
+
+    @property
+    def understanding(self) -> Understanding:
+        """Free-text understanding (LLM) - ask only after your own parsing failed."""
+        ...
 
     @property
     def purge_session_factory(self) -> async_sessionmaker[AsyncSession]:
@@ -88,5 +98,10 @@ class ModuleDefinition:
     locales_dir: Path | None = None
     # Retention (PRD §7.10): what this module deletes when its time has come.
     purgers: Sequence[PurgerFactory] = ()
+    # Live dashboard updates (§8.9): DomainEvent class name -> topics it changes, e.g.
+    # {"AppointmentConfirmed": ("appointments",)}. The dashboard refetches those areas.
+    live_topics: Mapping[str, Sequence[str]] = field(default_factory=dict)
+    # Messages this module may send outside the 24 h window; clinics map each to a template.
+    template_slots: Sequence[TemplateSlot] = ()
     # Jobs that run once a day: job_type -> UTC hour. The cron tick schedules them.
     daily_jobs: Mapping[str, int] = field(default_factory=dict)

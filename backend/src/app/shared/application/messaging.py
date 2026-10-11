@@ -28,6 +28,33 @@ class OutsideServiceWindowError(DomainError):
 
 
 @dataclass(frozen=True)
+class TemplateSlot:
+    """A message a module may need to send OUTSIDE the 24 h window (PRD PL-4.2). Each clinic
+    maps the slot to one of its Meta-approved templates (Settings → WhatsApp templates)."""
+
+    key: str  # e.g. "appointments.reminder"
+    description: str  # what the template is for, shown to the clinic
+    params: tuple[str, ...] = ()  # body variables {{1}}, {{2}} ... in this order
+    buttons: tuple[str, ...] = ()  # quick-reply buttons, in this order
+    example: str = ""  # suggested body text for the clinic to submit to Meta
+
+
+@dataclass(frozen=True)
+class TemplateFallback:
+    """What to send instead when the contact is outside the 24 h window."""
+
+    slot: str
+    params: tuple[str, ...] = ()
+    button_payloads: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        # Meta rejects variables with new lines, tabs or more than 4 spaces in a row.
+        object.__setattr__(
+            self, "params", tuple(" ".join(p.split())[:1000] or "-" for p in self.params)
+        )
+
+
+@dataclass(frozen=True)
 class SendRequest:
     tenant_id: TenantId
     contact_id: UUID
@@ -35,6 +62,8 @@ class SendRequest:
     phone_number_id: str  # which of the tenant's WhatsApp numbers sends it
     message: OutboundMessage
     last_inbound_at: datetime | None  # the contact's last message, for the 24 h window
+    # Outside the window, send the clinic's template for this slot instead (if it mapped one).
+    fallback: TemplateFallback | None = None
 
 
 @dataclass(frozen=True)
@@ -45,5 +74,6 @@ class SendReceipt:
 
 class Messenger(Protocol):
     async def send(self, request: SendRequest) -> SendReceipt:
-        """Raises OutsideServiceWindowError for non-template messages after 24 h."""
+        """After 24 h: sends the fallback template if the clinic mapped one, otherwise raises
+        OutsideServiceWindowError."""
         ...

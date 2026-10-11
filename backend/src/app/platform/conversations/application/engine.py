@@ -39,12 +39,15 @@ class FlowRegistry:
     def get(self, key: str) -> Flow | None:
         return self._flows.get(key)
 
-    def for_keyword(self, word: str, enabled_modules: frozenset[str]) -> Flow | None:
+    def for_reply(
+        self, word: str, choice_id: str | None, enabled_modules: frozenset[str]
+    ) -> Flow | None:
+        """A flow that starts from anywhere on this keyword or tapped button."""
         return next(
             (
                 f
                 for f in self._flows.values()
-                if word in f.keywords and f.module_key in enabled_modules
+                if f.module_key in enabled_modules and f.starts_on(word, choice_id)
             ),
             None,
         )
@@ -72,7 +75,7 @@ class FlowEngine:
         self._flows, self._max_attempts = flows, max_attempts
 
     def keyword_flow(self, ctx: FlowContext) -> str | None:
-        flow = self._flows.for_keyword(ctx.reply.normalized, ctx.enabled_modules)
+        flow = self._flows.for_reply(ctx.reply.normalized, ctx.reply.choice_id, ctx.enabled_modules)
         return flow.key if flow else None
 
     async def start(self, ctx: FlowContext, session: ConversationSession, flow_key: str) -> None:

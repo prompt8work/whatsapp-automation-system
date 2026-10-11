@@ -15,9 +15,14 @@ from app.platform.messaging.application.commands.send_message import (
 )
 from app.platform.messaging.application.ports import SendError
 from app.platform.messaging.domain.message import Message, MessageStatus
+from app.platform.messaging.domain.templates import TemplateMapping
 from app.platform.messaging.infrastructure.recording import RecordingGateway
 from app.shared.application.jobs import JobContext, ScheduleJob
-from app.shared.application.messaging import OutsideServiceWindowError, SendRequest
+from app.shared.application.messaging import (
+    OutsideServiceWindowError,
+    SendRequest,
+    TemplateFallback,
+)
 from app.shared.kernel.errors import NotFoundError
 from app.shared.kernel.ids import TenantId
 from app.shared.kernel.messages import Template, Text
@@ -49,10 +54,28 @@ class Messages:
         self.rows[message.id] = copy.deepcopy(message)
 
 
+class Templates:
+    def __init__(self) -> None:
+        self.rows: dict[str, TemplateMapping] = {}
+
+    async def get(self, slot: str) -> TemplateMapping | None:
+        return self.rows.get(slot)
+
+    async def list(self) -> list[TemplateMapping]:
+        return list(self.rows.values())
+
+    async def put(self, mapping: TemplateMapping) -> None:
+        self.rows[mapping.slot] = mapping
+
+    async def delete(self, slot: str) -> None:
+        self.rows.pop(slot, None)
+
+
 class MessagesUoW(InMemoryUnitOfWork):
     def __init__(self) -> None:
         super().__init__()
         self.messages = Messages()
+        self.templates = Templates()
 
 
 class Credentials:
@@ -85,7 +108,13 @@ class World:
             self.uow, self.gateway, self.credentials, self.jobs, self.clock, SequentialIds()
         )
 
-    def request(self, message: object, *, hours_since_reply: float = 0.1) -> SendRequest:
+    def request(
+        self,
+        message: object,
+        *,
+        hours_since_reply: float = 0.1,
+        fallback: TemplateFallback | None = None,
+    ) -> SendRequest:
         return SendRequest(
             TENANT,
             UUID(int=1),
@@ -93,6 +122,7 @@ class World:
             "123",
             message,  # type: ignore[arg-type]
             self.clock.now() - timedelta(hours=hours_since_reply),
+            fallback,
         )
 
 
@@ -114,6 +144,23 @@ async def test_free_text_is_refused_outside_24h_window_but_templates_are_allowed
 
     receipt = await world.send(world.request(Template("reminder"), hours_since_reply=25))
     assert receipt.sent
+
+
+async def test_outside_the_window_the_clinics_template_for_the_slot_is_sent() -> None:
+    world = World()
+    fallback = TemplateFallback("demo.reminder", ("Rahul", "Mon\n10 AM"), ("rem:confirm:1",))
+    late = world.request(Text("Reminder"), hours_since_reply=30, fallback=fallback)
+    with pytest.raises(OutsideServiceWindowError, match=r"demo\.reminder"):
+        await world.send(late)  # not mapped yet
+
+    await world.uow.templates.put(TemplateMapping("demo.reminder", "visit_reminder", "en"))
+    assert (await world.send(late)).sent
+    sent = world.gateway.sent[-1].message
+    assert sent == Template("visit_reminder", "en", ("Rahul", "Mon 10 AM"), ("rem:confirm:1",))
+
+    inside = world.request(Text("Reminder"), fallback=fallback)
+    await world.send(inside)
+    assert world.gateway.sent[-1].message == Text("Reminder")  # in the window: as written
 
 
 async def test_transient_failure_schedules_retry_which_resends_once() -> None:

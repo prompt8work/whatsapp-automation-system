@@ -20,9 +20,12 @@ from app.modules.appointments.application.ports import ClinicDirectory
 from app.modules.appointments.application.unit_of_work import AppointmentsUnitOfWork
 from app.modules.appointments.domain.errors import AppointmentNotFoundError
 from app.modules.appointments.presentation.whatsapp.formatting import when
+from app.modules.appointments.presentation.whatsapp.templates import update_fallback
 from app.shared.application.conversation import Translator
 from app.shared.application.events import StoredEvent
+from app.shared.application.messaging import TemplateFallback
 from app.shared.kernel.ids import TenantId
+from app.shared.kernel.messages import OutboundMessage
 
 log = logging.getLogger(__name__)
 
@@ -38,8 +41,17 @@ NOTIFY: dict[str, tuple[str, bool]] = {
 
 
 class PatientNotifier(Protocol):
-    async def notify(self, tenant_id: TenantId, contact_id: UUID, text: str) -> bool:
-        """False if it could not be sent (e.g. outside the 24 h window, no number)."""
+    async def notify(
+        self,
+        tenant_id: TenantId,
+        contact_id: UUID,
+        message: OutboundMessage | str,
+        *,
+        fallback: TemplateFallback | None = None,
+        reminder: bool = False,
+    ) -> bool:
+        """False if it could not be sent (no number, outside the 24 h window with no template
+        mapped for `fallback`, or - for a `reminder` - the contact replied STOP, PL-2.4)."""
         ...
 
 
@@ -77,7 +89,9 @@ class NotifyPatient:
             doctor=doctor.name,
             reason=(event.payload.get("reason") or "").strip(),
         ).strip()
-        if not await self._notifier.notify(event.tenant_id, appointment.contact_id, text):
+        if not await self._notifier.notify(
+            event.tenant_id, appointment.contact_id, text, fallback=update_fallback(text)
+        ):
             log.info(
                 "notification.skipped",
                 extra={"event": event.event_type, "appointment": str(appointment.id)},
@@ -101,5 +115,7 @@ class NotifyDeletionDecision:
             return
         text = self._texts.t(key, reason=event.payload.get("reason", "")).strip()
         contact_id = UUID(event.payload["contact_id"])
-        if not await self._notifier.notify(event.tenant_id, contact_id, text):
+        if not await self._notifier.notify(
+            event.tenant_id, contact_id, text, fallback=update_fallback(text)
+        ):
             log.info("notification.skipped", extra={"event": event.event_type})

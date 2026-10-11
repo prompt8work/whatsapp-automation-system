@@ -64,6 +64,39 @@ Tests marked `db` need PostgreSQL: set `TEST_DATABASE_URL` (role `app_rw`, e.g. 
 `DATABASE_URL`) after `alembic upgrade head`; without it they are skipped. Retention tests also use
 role `app_purge`: by default the same URL with `app_purge:app_purge`, or set `TEST_DATABASE_PURGE_URL`.
 
+## Reminders and WhatsApp templates
+
+Patients get reminders at the times set in Settings → Booking rules (default 24 h and 2 h before). Each reminder has Confirm, Reschedule and Cancel buttons, plus Pay now when the consultation fee is still due.
+
+WhatsApp only allows **approved templates** more than 24 hours after a patient's last message. For each message listed under Settings → WhatsApp templates:
+1. Create a template in WhatsApp Manager with the variables and quick-reply buttons in the order shown.
+2. Wait for Meta to approve it.
+3. Enter its name.
+
+Until a template is entered, that message is skipped for patients outside the window.
+
+## Live dashboard
+
+The dashboard updates by itself the moment something changes: a new request, a WhatsApp message, a payment or a deletion request. It uses one streaming connection (`/api/live`) per open tab, and polls every 60 s as a backup. No extra service is needed.
+
+## AI understanding (optional)
+
+Patients can type things like "day after tomorrow evening" or "I need to move my visit". The bot's own rules try first. If they fail and AI understanding is on, Claude reads that one message.
+
+**To turn it on:**
+1. On the server, set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`.
+2. Each clinic ticks the AI understanding box under Settings → Booking rules.
+
+Only the message text is sent, never names or phone numbers. If the AI is unavailable, the bot asks again as usual.
+
+## Payments
+
+Clinics choose any of **WhatsApp Pay**, **Razorpay links** and **Pay at clinic** in Settings → Payments, and set the consultation fee in Settings → Booking rules. When an appointment is confirmed, the patient gets a "Pay now" message (or "payable at the clinic"). Staff can mark payments paid or refunded, or cancel them, on the **Payments** page.
+
+- **Razorpay:** save the key secret and webhook secret (this needs `CREDENTIALS_KEY`), then point a Razorpay webhook at the path shown in settings.
+- **WhatsApp Pay:** link the clinic's payment account in WhatsApp Business Manager and enter its configuration name.
+- **Record keeping:** payment records are never deleted.
+
 ## Data retention
 
 A daily job (20:00 UTC, scheduled by the cron tick) deletes closed cases after 60 days and inactive

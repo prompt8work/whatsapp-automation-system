@@ -98,3 +98,18 @@ already = "You've already asked us to delete your data - the clinic will confirm
 nothing = "We don't keep any patient details for this number. This chat's history is deleted automatically 60 days after your last message."
 completed = "Done ✅ Your data has been deleted from the clinic's records. Payment records are kept, as the law requires."
 rejected = "The clinic couldn't delete your data yet: {reason}\nReply AGENT to talk to staff."
+
+[appointments.pay]
+ask = "The consultation fee for {ref} is {amount}. You can pay now, or at the clinic."
+button = "Pay now"
+at_clinic = "The consultation fee for {ref} is {amount}, payable at the clinic."
+due = "💳 {amount} due for {ref}"
+receipt = "Payment received ✅ {amount} for {ref}. Receipt {receipt}. Thank you!"
+refunded = "Your payment of {amount} for {ref} has been refunded (receipt {receipt})."
+nothing_due = "Nothing is due for that appointment - thank you! Reply MENU for your options."
+
+[appointments.remind]
+body = "⏰ Reminder: {patient} with {doctor}, {when} ({ref})."
+confirm = "Confirm"
+confirmed = "Thanks for confirming ✅ See you {when}."
+not_booked = "That appointment can't be confirmed any more. Reply MENU to see your options."

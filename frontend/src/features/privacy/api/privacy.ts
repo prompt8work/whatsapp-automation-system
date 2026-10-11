@@ -15,7 +15,7 @@ export function useDeletionRequests(enabled = true) {
   return useQuery({
     queryKey: privacyKeys.requests,
     queryFn: () => unwrap(api.GET("/api/deletion-requests")),
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     enabled,
   });
 }

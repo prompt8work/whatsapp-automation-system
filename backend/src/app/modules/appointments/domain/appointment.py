@@ -28,6 +28,7 @@ from app.modules.appointments.domain.events import (
     AppointmentNoShow,
     AppointmentRequested,
     AppointmentRescheduled,
+    AttendanceConfirmed,
     RescheduleDeclined,
     RescheduleRequested,
 )
@@ -200,6 +201,12 @@ class Appointment(TenantAggregateRoot):
         self._ensure_started(by.at)
         self._move(S.COMPLETED)
         self.record(AppointmentCompleted(**self._who(by)))
+
+    def confirm_attendance(self, by: By) -> None:
+        """The patient says they will come (reminder button). Only for booked visits."""
+        if self.status not in BOOKED:
+            raise InvalidTransitionError(f"A {self.status.value} appointment can't be confirmed")
+        self.record(AttendanceConfirmed(**self._who(by)))
 
     def mark_no_show(self, by: By) -> None:
         self._ensure_started(by.at)

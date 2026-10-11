@@ -443,25 +443,57 @@ use case ─► aggregate.record(event) ─► UoW.commit: [state + history + ou
 - **Vercel Cron** → `GET /internal/jobs/tick` (requires `CRON_SECRET`) every minute. Each tick claims due rows with `FOR UPDATE SKIP LOCKED LIMIT n`, runs the handlers from the registry, marks them done, and retries failures with back-off. Each tick stops after roughly 50 s so it finishes inside the function's time limit.
 - Daily jobs (`ModuleDefinition.daily_jobs`, e.g. `retention.run`) are scheduled by the tick itself, once per day, through an idempotency key.
 
+### 8.5a Reminders and WhatsApp templates (PRD AP-5.1/5.2, PL-4.2, PL-7.2/7.3)
+
+- **Template fallback, decided in one place.**
+  - A module never decides between a free-form message and a template. It sends its normal message plus `SendRequest.fallback = TemplateFallback(slot, params, button_payloads)`.
+  - Inside the 24 h window the message goes as written. Outside it, `SendMessage` looks up the clinic's mapping for the slot and sends that `Template`. With no mapping it raises `OutsideServiceWindowError`, and notifiers log a skip.
+  - Variables are cleaned to Meta's rules: no new lines and no runs of spaces.
+- **Slots** are declared by modules (`ModuleDefinition.template_slots`: key, description, variables, quick-reply buttons, example). Admins map each one in Settings → WhatsApp templates (`template_mappings`, RLS, permission `templates.manage`).
+  - Appointments declares `appointments.reminder`, `appointments.reminder_pay`, `appointments.payment_due` and `appointments.update`; the last carries every other notification as one variable.
+- **Reminders.**
+  - `AppointmentConfirmed` / `AppointmentRescheduled` → `ScheduleReminders` creates one `appointments.send_reminder` job per `reminder_hours` entry (a Booking rules setting, default 24 h and 2 h). The key is `appointment:start:offset`, so each reminder is created once.
+  - The job re-checks that the appointment is still booked **at that start time**, so a reminder for a moved or cancelled appointment does nothing and jobs never need cancelling. Contacts who sent STOP are skipped.
+- **Buttons from anywhere.**
+  - `Flow.choice_prefixes`: a tap whose choice id starts with e.g. `rem:reschedule:` starts that flow even mid-conversation. Template quick-reply payloads come back as the same ids.
+  - `PickAppointment` takes the tapped appointment. `ReminderAction` handles Confirm (an `AttendanceConfirmed` history event) and Pay now.
+  - Every action checks that the appointment belongs to the person tapping.
+
+### 8.5b Understanding free text (LLM, Phase 2)
+
+- **Port.** `shared/application/understanding.py` defines `Understanding.date(text, today)`, `.time(text)` and `.choose(text, options)`, and is available to modules as `services.understanding`. The default is `NoUnderstanding`. `platform/understanding/infrastructure/claude.py` is the Claude adapter: Messages API over httpx, temperature 0, around 100 output tokens, an 8 s timeout and a one-JSON-object reply.
+- **Rules first.** Buttons and `parsing.py` handle almost everything. The LLM is asked only when they fail, in `AskDay`, `AskSlot` and the menu ("I need to move my visit" → Reschedule).
+- **Fails safe.** Any error, timeout, unparsable reply, past date or unknown option means "not understood", and the bot re-asks exactly as before.
+- **Two switches.** The server sets `LLM_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY` (model `LLM_MODEL`, default `claude-haiku-5-5`), and each clinic opts in under Booking rules → `ai_understanding`.
+- **Privacy.** Only the message text is sent, whitespace-collapsed and capped at 300 characters, never names, phones or ids. The text is wrapped in `<message>` tags and the model is told to treat it as data. Its answer is validated (a real date not in the past, an existing option key), so it can never pick something the bot didn't offer.
+
 ### 8.6 Payments (three methods, one interface)
 
 ```python
+# platform/payments/application/ports.py
 class PaymentGateway(Protocol):
-    key: str                                                         # "whatsapp_pay" | "razorpay_link" | "at_clinic"
-    async def create(self, req: PaymentRequest, contact: Contact) -> GatewayResult: ...   # sends/returns what the patient taps
-    def parse_webhook(self, headers: Mapping[str, str], body: bytes) -> PaymentStatusUpdate | None: ...  # verifies signature
-    async def refund(self, req: PaymentRequest) -> None: ...         # WhatsApp Pay raises RefundNotSupported → staff use Mark as refunded
+    method: PaymentMethod                                   # whatsapp_pay | razorpay_link | at_clinic
+    async def create(self, payment, settings, secrets) -> GatewayResult: ...   # set up at the provider
+    def message(self, payment, settings, body, button) -> OutboundMessage | None: ...  # what the patient taps
+    async def refund(self, payment, settings, secrets) -> None: ...  # RefundNotSupportedError where refunds happen outside
 ```
 
-| Option | `create` | Status arrives on | Refund |
+| Option | `create` / `message` | Status arrives on | Refund |
 |---|---|---|---|
-| **A: WhatsApp Payments** (`WhatsAppPayGateway`) | Sends a WhatsApp **order details** ("Review and pay") message using the tenant's payment configuration from WhatsApp Business Manager (for example Razorpay linked there) | `/webhooks/whatsapp` (the inbound pipeline passes payment statuses to payments) | Outside the system, then **Mark as refunded** |
-| **B: Razorpay link** (`RazorpayLinkGateway`) | Creates a Razorpay payment link with the tenant's keys, then the bot sends it with a **Pay now** button | `/webhooks/razorpay` | From the dashboard through the Razorpay API |
-| **C: Pay at clinic** (`AtClinicGateway`) | Sends nothing. The request stays `PENDING` and shows "due at clinic" | Staff **Mark as paid** (cash or UPI at the counter) | **Mark as refunded** |
+| **A: WhatsApp Payments** (`WhatsAppPayGateway`) | No API call. The message is an `OrderDetails` ("Review and pay") naming the clinic's payment configuration from WhatsApp Business Manager | `/webhooks/whatsapp`: statuses of type `payment` → `PaymentNotice` → `WhatsAppPaymentSink` | Outside, then **Mark as refunded** |
+| **B: Razorpay link** (`RazorpayLinkGateway`) | `POST /v1/payment_links` with the clinic's keys. The message is a `LinkButton` (WhatsApp CTA URL) "Pay now" | `/webhooks/razorpay/{tenant_id}`, HMAC-verified with the clinic's webhook secret | **Refund** button → `POST /v1/payments/{id}/refund` |
+| **C: Pay at clinic** (`AtClinicGateway`) | Nothing. The bot says "₹500, payable at the clinic" | Staff **Mark as paid** | **Mark as refunded** |
 
-- The tenant turns on any combination of the three methods. If more than one is on, the bot step `ChoosePaymentMethod` asks the patient (it **skips** itself when only one is on). `container.py` builds a `PaymentGatewayRegistry` keyed by `key`, and the use case gets the chosen gateway from it. **No use case knows which method is in use.**
-- `platform/payments` owns `PaymentRequest(subject_type, subject_id, amount, status, gateway, gateway_ref)` and the **ledger** (PRD RT-7). It knows nothing about appointments. The appointments module talks to it through the payments facade and hears back through the `PaymentSucceeded`, `PaymentFailed` and `PaymentRefunded` events.
-- Status changes come **only** from a verified, deduplicated webhook (unique `provider_event_id`) or from staff actions with the `payment.mark` permission (**Mark as paid / Mark as refunded**). Every change is audited (PL-6.4).
+- **One port for modules.** `shared/application/payments.py` defines `Payments` (`services.payments`, like `Messenger`): `request`, `pay_message`, `for_subjects`, `unsettled`, `expire`, `detach`, `primary_method`. Feature modules never see gateways, keys or webhooks. `bootstrap/container.py` builds the payments core once. The HTTP client is injectable, so tests use a mock Razorpay.
+- **Settings** (`payment_settings`, one row per tenant): the methods switched on, the WhatsApp Pay configuration name and the Razorpay key id. The Razorpay key and webhook secrets are Fernet-encrypted with `CREDENTIALS_KEY` and write-only from the dashboard. Patients are offered the first method that is on (A → B → C). Staff can always mark a payment paid at the counter.
+- **Status changes** come only from a verified webhook or a staff action (`payment.mark`, audited). Webhooks are idempotent by state: a repeated "paid" changes nothing, and money that arrives after expiry is still recorded. Every change is an event: outbox plus the append-only `payment_events` history.
+- **Appointments** (`presentation/whatsapp/payments.py`):
+  - `AppointmentConfirmed` → request the `consultation_fee` and send Pay now (or "payable at clinic").
+  - Cancelled, declined, expired or no-show → the pending payment expires (PL-6.5).
+  - `PaymentSucceeded` / `PaymentRefunded` → WhatsApp receipt.
+  - R6: the menu shows "₹500 due" with **Pay now** first.
+- **Retention.** A pending payment blocks the case purge (RT-6). `CasePurged` carries the appointment ids, and payments **detach** those records: the subject is cleared, while the payer name, phone, amount and references are kept (RT-7). The database forbids deleting payments outright: `REVOKE DELETE ON payments FROM app_rw, app_purge`.
+- Not yet: *pay at booking* with hold release (AP-5.4); payments are asked for after confirmation (OQ-3).
 
 ### 8.7 Retention and deletion (PRD §7.10)
 
@@ -480,6 +512,18 @@ class Purger(Protocol):
 - **Purges run as `app_purge`** (`PlatformServices.purge_session_factory`), the only role allowed to delete append-only history. RLS still applies per tenant.
 - **Delete my data** (AP-10.8–13). `DELETE MY DATA` is a *flow keyword* (`Flow.keywords`), so it works from anywhere, even mid-flow. It also appears as the menu item "Delete my data". The patient picks whose data (or everyone's), sees what is deleted and that payment records stay, then confirms, which creates a `DeletionRequest`. Staff approve or reject it with a reason on the **Privacy** page. Approval cancels active appointments, runs the same `CasePurger.purge_patient`, writes the deletion record (`AP-10.11`) and confirms on WhatsApp.
 - **Dashboard**: Privacy page (requests, "deleting in the next 7 days", deletion record). The appointment detail has a Case card (close/reopen, legal hold, scheduled deletion date). Booking rules include the two retention periods.
+
+### 8.9 Live dashboard updates (Phase 2)
+
+Vercel functions can't keep WebSockets open, and pooled Postgres connections can't `LISTEN`. So instead of a push service:
+
+1. **Change feed in the same transaction.** Modules declare `ModuleDefinition.live_topics` (event type → topics: `appointments`, `inbox`, `payments`, `privacy`). On commit, `SqlUnitOfWork` bumps `live_changes(tenant_id, topic, version)` for the topics of its events, plus any `uow.touch(topic)`; for example, the message repository touches `inbox`. No outbox delay, and nothing changes in use cases.
+2. **Stream.** `GET /api/live` (any signed-in member) is a Server-Sent Events response.
+   - Every 1.5 s it reads the tenant's few version rows, a primary-key lookup in its own short transaction, and sends `{changed, versions}` when a topic moved.
+   - After about 25 s it ends (`maxDuration` is 60 s). The client reconnects with `?since=<versions>`, so nothing is missed between connections.
+3. **Dashboard.** `shared/api/live.ts` reads the stream with `fetch` (it needs the `Authorization` header), refreshes the token on 401 and backs off on errors. `useLiveUpdates` invalidates `["appointments"]`, `["inbox"]`, `["payments"]` and `["privacy"]` as their topics change.
+
+Cost: one open function invocation per open dashboard tab, mostly idle. If that ever matters, a managed push service (Pusher, Ably or Supabase Realtime) can replace step 2 and the same topics, without touching modules.
 
 ### 8.8 Auth and permissions
 
@@ -539,7 +583,7 @@ Rules, in the same spirit as the backend:
 - A feature imports another feature **only through its `index.ts`**. `shared` never imports from `features`.
 - Components never call `fetch` directly. **All server calls go through `api/` hooks.**
 - Permissions shown in the UI (`can("appointment.approve")`) only hide buttons. The real check is always made on the backend.
-- "Live" lists (requests queue, inbox) refetch every 10 s and whenever the window regains focus (ADR-007). When a `RealtimePublisher` adapter is added later, it will invalidate the same query keys, so the components don't change.
+- "Live" lists update the moment something changes (§8.9). `app/layout/useLiveUpdates.ts` follows `/api/live` and invalidates the query keys of the changed topics. The components don't know. Polling every 60 s and refetch-on-focus remain as the fallback.
 
 ---
 
@@ -683,4 +727,8 @@ Short ADRs live in `docs/adr/NNN-title.md`. These are the first ones:
 
 6. ✅ **Dashboard** (done 2026-10-11): requests queue, appointments by clinic-local day, detail with history and actions, settings (doctors & hours, locations, booking rules, users), staff inbox with take over / reply / hand back (real `HandoverDesk` in `platform/inbox`).
 7. ✅ **Retention and deletion** (done 2026-10-11): `Purger` port, daily `retention.run` job, `CasePurger` (RT-1/2/3/6), `ContactPurger` (RT-4), deletion records, the `DELETE MY DATA` flow + staff approval, Privacy page and Case card (§8.7).
-8. **Phase 2:** payments (WhatsApp Payments, Razorpay links, Pay at clinic, Mark as paid/refunded), reminder templates with buttons, `LlmParser`, push real-time updates.
+8. **Phase 2:**
+   - 8.1 ✅ **Payments** (done 2026-10-11): WhatsApp Payments, Razorpay links, Pay at clinic, Mark as paid/refunded, refunds, receipts, R6, RT-6/RT-7 (§8.6).
+   - 8.2 ✅ **Reminders and templates** (done 2026-10-11): reminders at the clinic's hours with Confirm · Reschedule · Cancel (· Pay now), buttons that open their flow from anywhere, template fallback outside the 24 h window with a per-clinic slot → template mapping (§8.5a).
+   - 8.3 ✅ **Understanding free text** (done 2026-10-11): `Understanding` port (date · time · menu choice), Claude adapter, rules first, per-clinic opt-in (§8.5b).
+   - 8.4 ✅ **Live dashboard updates** (done 2026-10-12): per-tenant topic versions bumped on commit, `/api/live` SSE stream, dashboard refetches only the changed areas (§8.9).

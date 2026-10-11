@@ -41,6 +41,7 @@ class InMemoryUnitOfWork:
         self._tracked: list[AggregateRoot] = []
         self.committed_events: list[DomainEvent] = []
         self.commits = 0
+        self.touched: set[str] = set()
 
     async def __aenter__(self) -> Self:
         self._tracked = []
@@ -57,6 +58,9 @@ class InMemoryUnitOfWork:
     def track(self, aggregate: AggregateRoot) -> None:
         if aggregate not in self._tracked:
             self._tracked.append(aggregate)
+
+    def touch(self, topic: str) -> None:
+        self.touched.add(topic)
 
     async def commit(self) -> None:
         for aggregate in self._tracked:

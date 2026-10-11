@@ -15,6 +15,7 @@ from app.platform.messaging.domain.inbound import (
     DeliveryStatus,
     InboundKind,
     InboundMessage,
+    PaymentNotice,
     StatusUpdate,
     WebhookBatch,
 )
@@ -54,6 +55,11 @@ def parse_webhook(payload: dict[str, Any]) -> WebhookBatch:
                 if message:
                     batch.messages.append(message)
             for raw in value.get("statuses") or []:
+                if raw.get("type") == "payment":
+                    notice = _payment(phone_number_id, raw)
+                    if notice:
+                        batch.payments.append(notice)
+                    continue
                 status = _status(phone_number_id, raw)
                 if status:
                     batch.statuses.append(status)
@@ -120,4 +126,22 @@ def _status(phone_number_id: str, raw: dict[str, Any]) -> StatusUpdate | None:
         status=status,
         at=_ts(raw.get("timestamp")),
         error=error,
+    )
+
+
+def _payment(phone_number_id: str, raw: dict[str, Any]) -> PaymentNotice | None:
+    payment = raw.get("payment") or {}
+    reference_id = payment.get("reference_id")
+    if not reference_id:
+        return None
+    amount = payment.get("amount") or {}
+    value, offset = amount.get("value"), amount.get("offset") or 100
+    transaction = payment.get("transaction") or {}
+    return PaymentNotice(
+        phone_number_id=phone_number_id,
+        reference_id=str(reference_id),
+        status=str(raw.get("status", "")),
+        transaction_id=str(transaction["id"]) if transaction.get("id") else None,
+        amount_minor=int(value) * 100 // int(offset) if value is not None else None,
+        at=_ts(raw.get("timestamp")),
     )

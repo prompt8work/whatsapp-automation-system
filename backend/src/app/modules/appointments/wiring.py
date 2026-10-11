@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from app.modules.appointments.application.commands.booking import RequestAppointment
 from app.modules.appointments.application.commands.changes import (
     CancelAppointment,
+    ConfirmAttendance,
     RecordAttendance,
     RescheduleAppointment,
     UpdateAppointmentDetails,
@@ -65,6 +66,16 @@ from app.modules.appointments.presentation.whatsapp.notifications import (
     NotifyDeletionDecision,
     NotifyPatient,
 )
+from app.modules.appointments.presentation.whatsapp.payments import (
+    DetachPayments,
+    ExpireAppointmentPayment,
+    RequestAppointmentPayment,
+    SendPaymentReceipt,
+)
+from app.modules.appointments.presentation.whatsapp.reminders import (
+    ScheduleReminders,
+    SendReminder,
+)
 from app.modules.appointments.presentation.whatsapp.rules import (
     NewContactRule,
     ReturningContactRule,
@@ -75,6 +86,11 @@ from app.modules.appointments.presentation.whatsapp.steps import (
     DELETE,
     DELETE_WORDS,
     MENU,
+    REM_CANCEL,
+    REM_CONFIRM,
+    REM_PAY,
+    REM_RESCHEDULE,
+    REMINDER,
     RESCHEDULE,
     AskBookingFields,
     AskDay,
@@ -92,6 +108,7 @@ from app.modules.appointments.presentation.whatsapp.steps import (
     ConfirmReschedule,
     MainMenu,
     PickAppointment,
+    ReminderAction,
 )
 from app.platform.contacts.contracts import EnsureContactCommand, GetContactQuery
 from app.platform.contacts.integration import contacts_for
@@ -99,10 +116,14 @@ from app.platform.conversations.integration import TomlTranslator, consent_step
 from app.platform.retention.integration import record_deletion_for
 from app.platform.tenancy.integration import tenancy_for
 from app.shared.application.conversation import Flow
-from app.shared.application.messaging import OutsideServiceWindowError, SendRequest
+from app.shared.application.messaging import (
+    OutsideServiceWindowError,
+    SendRequest,
+    TemplateFallback,
+)
 from app.shared.kernel.actor import Actor
 from app.shared.kernel.ids import TenantId
-from app.shared.kernel.messages import Text
+from app.shared.kernel.messages import OutboundMessage, Text
 from app.shared.module import PlatformServices
 
 MODULE_KEY = "appointments"
@@ -181,6 +202,7 @@ def use_cases_for(services: PlatformServices, tenant_id: TenantId) -> Appointmen
         decline_reschedule=DeclineReschedule(uow, clock),
         cancel=cancel,
         record_attendance=RecordAttendance(uow, clock),
+        confirm_attendance=ConfirmAttendance(uow, clock),
         update_details=UpdateAppointmentDetails(uow, clinic, clock),
         list_appointments=ListAppointments(uow, clinic),
         list_requests=ListRequests(uow),
@@ -190,7 +212,12 @@ def use_cases_for(services: PlatformServices, tenant_id: TenantId) -> Appointmen
         pending_deletion_of=PendingDeletionOf(uow),
         list_deletion_requests=ListDeletionRequests(uow),
         approve_deletion=ApproveDeletion(
-            uow, cancel, case_purger(services), record_deletion_for(services), clock
+            uow,
+            cancel,
+            case_purger(services),
+            record_deletion_for(services),
+            services.payments,
+            clock,
         ),
         reject_deletion=RejectDeletion(uow, clock),
     )
@@ -210,7 +237,10 @@ def expire_stale(services: PlatformServices) -> ExpireStale:
 
 def case_purger(services: PlatformServices) -> CasePurger:
     return CasePurger(
-        services.purge_session_factory, ClinicAdapter(services).settings, services.clock
+        services.purge_session_factory,
+        ClinicAdapter(services).settings,
+        services.clock,
+        services.payments,
     )
 
 
@@ -220,7 +250,12 @@ def schedule_expiry(services: PlatformServices) -> ScheduleExpiry:
 
 # ------------------------------------------------------------------ WhatsApp (build step 5)
 def bot(services: PlatformServices) -> Bot:
-    return Bot(lambda tenant_id: use_cases_for(services, tenant_id), ClinicAdapter(services))
+    return Bot(
+        lambda tenant_id: use_cases_for(services, tenant_id),
+        ClinicAdapter(services),
+        services.payments,
+        services.understanding,
+    )
 
 
 def book_flow(services: PlatformServices) -> Flow:
@@ -250,13 +285,30 @@ def menu_flow(services: PlatformServices) -> Flow:
 def reschedule_flow(services: PlatformServices) -> Flow:
     b = bot(services)
     return Flow(
-        RESCHEDULE, MODULE_KEY, (PickAppointment(b), AskDay(b), AskSlot(b), ConfirmReschedule(b))
+        RESCHEDULE,
+        MODULE_KEY,
+        (PickAppointment(b), AskDay(b), AskSlot(b), ConfirmReschedule(b)),
+        choice_prefixes=frozenset({REM_RESCHEDULE}),
     )
 
 
 def cancel_flow(services: PlatformServices) -> Flow:
     b = bot(services)
-    return Flow(CANCEL, MODULE_KEY, (PickAppointment(b), ConfirmCancel(b)))
+    return Flow(
+        CANCEL,
+        MODULE_KEY,
+        (PickAppointment(b), ConfirmCancel(b)),
+        choice_prefixes=frozenset({REM_CANCEL}),
+    )
+
+
+def reminder_flow(services: PlatformServices) -> Flow:
+    return Flow(
+        REMINDER,
+        MODULE_KEY,
+        (ReminderAction(bot(services)),),
+        choice_prefixes=frozenset({REM_CONFIRM, REM_PAY}),
+    )
 
 
 def delete_data_flow(services: PlatformServices) -> Flow:
@@ -280,13 +332,23 @@ class WhatsAppNotifier:
 
     services: PlatformServices
 
-    async def notify(self, tenant_id: TenantId, contact_id: UUID, text: str) -> bool:
+    async def notify(
+        self,
+        tenant_id: TenantId,
+        contact_id: UUID,
+        message: OutboundMessage | str,
+        *,
+        fallback: TemplateFallback | None = None,
+        reminder: bool = False,
+    ) -> bool:
         number = await tenancy_for(self.services).sending_number(tenant_id)
         if number is None:
             return False
         contact = await contacts_for(self.services, tenant_id).get(
             GetContactQuery(tenant_id, Actor.system(), contact_id)
         )
+        if reminder and contact.is_opted_out:
+            return False  # they replied STOP (PL-2.4)
         try:
             receipt = await self.services.messenger.send(
                 SendRequest(
@@ -294,8 +356,9 @@ class WhatsAppNotifier:
                     contact_id,
                     contact.phone,
                     number,
-                    Text(text),
+                    Text(message) if isinstance(message, str) else message,
                     contact.last_inbound_at,
+                    fallback,
                 )
             )
         except OutsideServiceWindowError:
@@ -314,3 +377,46 @@ def notify_patient(services: PlatformServices) -> NotifyPatient:
 
 def notify_deletion_decision(services: PlatformServices) -> NotifyDeletionDecision:
     return NotifyDeletionDecision(WhatsAppNotifier(services), TomlTranslator([LOCALES]))
+
+
+# ------------------------------------------------------------------ payments (step 8)
+def request_payment(services: PlatformServices) -> RequestAppointmentPayment:
+    return RequestAppointmentPayment(
+        lambda t: uow_for(services, t),
+        ClinicAdapter(services),
+        ContactsAdapter(services),
+        services.payments,
+        WhatsAppNotifier(services),
+        TomlTranslator([LOCALES]),
+    )
+
+
+def expire_payment(services: PlatformServices) -> ExpireAppointmentPayment:
+    return ExpireAppointmentPayment(services.payments)
+
+
+def payment_receipt(services: PlatformServices) -> SendPaymentReceipt:
+    return SendPaymentReceipt(
+        lambda t: uow_for(services, t), WhatsAppNotifier(services), TomlTranslator([LOCALES])
+    )
+
+
+def detach_payments(services: PlatformServices) -> DetachPayments:
+    return DetachPayments(services.payments)
+
+
+# ------------------------------------------------------------------ reminders (step 8.2)
+def schedule_reminders(services: PlatformServices) -> ScheduleReminders:
+    return ScheduleReminders(
+        lambda t: uow_for(services, t), ClinicAdapter(services), services.jobs, services.clock
+    )
+
+
+def send_reminder(services: PlatformServices) -> SendReminder:
+    return SendReminder(
+        lambda t: uow_for(services, t),
+        ClinicAdapter(services),
+        services.payments,
+        WhatsAppNotifier(services),
+        TomlTranslator([LOCALES]),
+    )

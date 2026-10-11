@@ -15,4 +15,5 @@ module = ModuleDefinition(
     },
     role_grants={Role.STAFF: {"inbox.read", "inbox.reply"}},
     event_handlers={CONTACT_FORGOTTEN: [forget_rows_in(handovers)]},  # retention RT-4
+    live_topics={e: ("inbox",) for e in ("HandoverRequested", "HandoverTaken", "HandoverEnded")},
 )

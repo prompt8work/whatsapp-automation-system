@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     credentials_key: SecretStr = SecretStr("")
 
+    # Understanding free text with an LLM (only when the rules fail; clinics opt in too).
+    # "none" = off. "anthropic" needs ANTHROPIC_API_KEY.
+    llm_provider: Literal["none", "anthropic"] = "none"
+    anthropic_api_key: SecretStr = SecretStr("")
+    llm_model: str = "claude-haiku-5-5"
+
     # Dashboard origins allowed by CORS (local Vite dev server).
     cors_origins: list[str] = ["http://localhost:5173"]
 
@@ -66,6 +72,8 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Set META_APP_SECRET and CREDENTIALS_KEY to use WHATSAPP_SENDER=meta"
                 )
+        if self.llm_provider == "anthropic" and not self.anthropic_api_key.get_secret_value():
+            raise ValueError("Set ANTHROPIC_API_KEY to use LLM_PROVIDER=anthropic")
         return self
 
 

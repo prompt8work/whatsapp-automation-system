@@ -13,7 +13,9 @@ import structlog
 from app.platform.messaging.application.ports import SendError
 from app.shared.kernel.messages import (
     Buttons,
+    LinkButton,
     ListMenu,
+    OrderDetails,
     OutboundMessage,
     Template,
     Text,
@@ -79,6 +81,50 @@ def render(to: str, message: OutboundMessage) -> dict[str, Any]:
                     "name": name,
                     "language": {"code": language},
                     "components": components,
+                },
+            }
+        case LinkButton(body=body, title=title, url=url):
+            return base | {
+                "type": "interactive",
+                "interactive": {
+                    "type": "cta_url",
+                    "body": {"text": body},
+                    "action": {
+                        "name": "cta_url",
+                        "parameters": {"display_text": title, "url": url},
+                    },
+                },
+            }
+        case OrderDetails() as order:
+            amount = {"value": order.amount_minor, "offset": 100}
+            return base | {
+                "type": "interactive",
+                "interactive": {
+                    "type": "order_details",
+                    "body": {"text": order.body},
+                    "action": {
+                        "name": "review_and_pay",
+                        "parameters": {
+                            "reference_id": order.reference_id,
+                            "type": "digital-goods",
+                            "payment_type": "upi",
+                            "payment_configuration": order.configuration,
+                            "currency": order.currency,
+                            "total_amount": amount,
+                            "order": {
+                                "status": "pending",
+                                "items": [
+                                    {
+                                        "retailer_id": order.reference_id,
+                                        "name": order.item_name,
+                                        "amount": amount,
+                                        "quantity": 1,
+                                    }
+                                ],
+                                "subtotal": amount,
+                            },
+                        },
+                    },
                 },
             }
     raise TypeError(f"Unsupported message {message!r}")

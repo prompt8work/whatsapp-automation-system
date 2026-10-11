@@ -11,6 +11,9 @@ from app.modules.appointments.presentation.whatsapp.notifications import (
     DELETION_NOTICES,
     NOTIFY,
 )
+from app.modules.appointments.presentation.whatsapp.payments import ENDED_UNPAID, RECEIPTS
+from app.modules.appointments.presentation.whatsapp.reminders import REMINDER_JOB
+from app.modules.appointments.presentation.whatsapp.templates import TEMPLATE_SLOTS
 from app.modules.appointments.wiring import (
     LOCALES,
     MODULE_KEY,
@@ -19,17 +22,24 @@ from app.modules.appointments.wiring import (
     cancel_flow,
     case_purger,
     delete_data_flow,
+    detach_payments,
+    expire_payment,
     expire_stale,
     menu_flow,
     new_contact_rule,
     notify_deletion_decision,
     notify_patient,
+    payment_receipt,
+    reminder_flow,
+    request_payment,
     reschedule_flow,
     returning_contact_rule,
     schedule_expiry,
+    schedule_reminders,
+    send_reminder,
 )
 from app.shared.kernel.roles import Role
-from app.shared.module import ModuleDefinition
+from app.shared.module import EventHandlerFactory, ModuleDefinition
 
 STAFF_PERMISSIONS = {
     "appointment.read",
@@ -40,6 +50,47 @@ STAFF_PERMISSIONS = {
     "appointment.attendance",
     "case.manage",
 }
+
+
+def _event_handlers() -> dict[str, list[EventHandlerFactory]]:
+    handlers: dict[str, list[EventHandlerFactory]] = {
+        "AppointmentRequested": [schedule_expiry],
+        "RescheduleRequested": [schedule_expiry],
+        "CasePurged": [detach_payments],  # RT-7
+    }
+
+    def add(event_type: str, factory: EventHandlerFactory) -> None:
+        handlers.setdefault(event_type, []).append(factory)
+
+    for event_type in NOTIFY:
+        add(event_type, notify_patient)
+    for event_type in DELETION_NOTICES:
+        add(event_type, notify_deletion_decision)
+    add("AppointmentConfirmed", request_payment)  # after the "Confirmed" message
+    add("AppointmentConfirmed", schedule_reminders)
+    add("AppointmentRescheduled", schedule_reminders)
+    for event_type in ENDED_UNPAID:
+        add(event_type, expire_payment)
+    for event_type in RECEIPTS:
+        add(event_type, payment_receipt)
+    return handlers
+
+
+def _live_topics() -> dict[str, tuple[str, ...]]:
+    """Dashboard areas each event changes (live updates, ARCHITECTURE §8.9)."""
+    from app.modules.appointments.domain import events
+    from app.shared.kernel.events import DomainEvent
+
+    topics: dict[str, tuple[str, ...]] = {
+        name: ("appointments",)
+        for name, cls in vars(events).items()
+        if isinstance(cls, type) and issubclass(cls, DomainEvent) and cls is not DomainEvent
+    }
+    for name in ("DeletionRequested", "DeletionRequestRejected", "DeletionRequestCompleted"):
+        topics[name] = ("privacy",)
+    topics["CasePurged"] = ("appointments", "privacy")
+    return topics
+
 
 module = ModuleDefinition(
     key=MODULE_KEY,
@@ -60,16 +111,17 @@ module = ModuleDefinition(
         Role.STAFF: STAFF_PERMISSIONS,
         Role.DOCTOR: {"appointment.read", "appointment.attendance"},
     },
-    job_handlers={EXPIRE_REQUEST_JOB: expire_stale, EXPIRE_RESCHEDULE_JOB: expire_stale},
-    event_handlers={
-        "AppointmentRequested": [schedule_expiry],
-        "RescheduleRequested": [schedule_expiry],
-        **{event_type: [notify_patient] for event_type in NOTIFY},
-        **{event_type: [notify_deletion_decision] for event_type in DELETION_NOTICES},
+    job_handlers={
+        EXPIRE_REQUEST_JOB: expire_stale,
+        EXPIRE_RESCHEDULE_JOB: expire_stale,
+        REMINDER_JOB: send_reminder,
     },
+    event_handlers=_event_handlers(),
     # WhatsApp (PRD §7.1): rules pick the flow for a new conversation; flows are the chats.
     router_rules=[returning_contact_rule, new_contact_rule],
-    flows=[book_flow, menu_flow, reschedule_flow, cancel_flow, delete_data_flow],
+    flows=[book_flow, menu_flow, reschedule_flow, cancel_flow, delete_data_flow, reminder_flow],
+    template_slots=TEMPLATE_SLOTS,
+    live_topics=_live_topics(),
     locales_dir=LOCALES,
     purgers=[case_purger],  # RT-1..RT-3
 )

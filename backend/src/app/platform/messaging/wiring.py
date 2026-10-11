@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
+from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.platform.messaging.application.commands.inbound import (
@@ -13,13 +15,18 @@ from app.platform.messaging.application.commands.inbound import (
 )
 from app.platform.messaging.application.commands.send_message import RetrySend, SendMessage
 from app.platform.messaging.application.commands.statuses import RecordDeliveryStatus
+from app.platform.messaging.application.commands.templates import TemplateSettings
 from app.platform.messaging.application.ports import WhatsAppGateway
 from app.platform.messaging.domain.repositories import CredentialStore
 from app.platform.messaging.infrastructure.unit_of_work import SqlMessagingUnitOfWork
+from app.platform.messaging.presentation.http.templates import (
+    build_router as build_templates_http_router,
+)
 from app.shared.application.jobs import JobScheduler
-from app.shared.application.messaging import SendReceipt, SendRequest
+from app.shared.application.messaging import SendReceipt, SendRequest, TemplateSlot
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.ids import IdGenerator, TenantId
+from app.shared.module import PlatformServices
 
 
 @dataclass(frozen=True)
@@ -68,4 +75,13 @@ def inbound_use_cases(
         mark_processed=MarkInboundProcessed(uow),
         load=LoadInbound(uow),
         record_status=RecordDeliveryStatus(uow),
+    )
+
+
+def build_templates_router(services: PlatformServices, slots: Sequence[TemplateSlot]) -> APIRouter:
+    """Needs every module's slots, so app/main.py mounts it explicitly."""
+    return build_templates_http_router(
+        lambda tenant_id: TemplateSettings(
+            SqlMessagingUnitOfWork(services.session_factory, tenant_id), slots, services.audit
+        )
     )

@@ -4,6 +4,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.platform.messaging.domain.message import Message
+from app.platform.messaging.domain.templates import TemplateMapping
 
 
 class MessageRepository(Protocol):
@@ -28,3 +29,15 @@ class CredentialStore(Protocol):
     async def get(self, phone_number_id: str) -> str | None: ...
 
     async def put(self, phone_number_id: str, access_token: str) -> None: ...
+
+
+class TemplateMappings(Protocol):
+    """Tenant-scoped (RLS)."""
+
+    async def get(self, slot: str) -> TemplateMapping | None: ...
+
+    async def list(self) -> list[TemplateMapping]: ...
+
+    async def put(self, mapping: TemplateMapping) -> None: ...
+
+    async def delete(self, slot: str) -> None: ...

@@ -39,3 +39,14 @@ whatsapp_credentials = Table(
     Column("access_token_encrypted", Text, nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
 )
+
+# A clinic's Meta-approved template per TemplateSlot (PRD PL-4.2). Tenant-owned (RLS).
+template_mappings = Table(
+    "template_mappings",
+    metadata,
+    Column("tenant_id", Uuid, primary_key=True),
+    Column("slot", String(100), primary_key=True),
+    Column("name", String(512), nullable=False),
+    Column("language", String(10), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+)
