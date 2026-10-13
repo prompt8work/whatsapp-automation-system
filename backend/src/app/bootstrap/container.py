@@ -93,6 +93,7 @@ def build_container(
     whatsapp_gateway: WhatsAppGateway | None = None,
     http_client: httpx.AsyncClient | None = None,
     understanding: Understanding | None = None,
+    jobs: JobScheduler | None = None,
 ) -> Container:
     clock = clock or SystemClock()
     ids = ids or Uuid7Generator()
@@ -107,7 +108,7 @@ def build_container(
 
     gateway, credentials = _whatsapp(settings, session_factory)
     gateway = whatsapp_gateway or gateway
-    jobs = SqlJobScheduler(session_factory, clock, ids)
+    jobs = jobs or SqlJobScheduler(session_factory, clock, ids)
     messenger = TenantMessenger(session_factory, gateway, credentials, jobs, clock, ids)
     audit = SqlAuditLogger(session_factory, clock, ids)
     http = http_client or httpx.AsyncClient(timeout=15)

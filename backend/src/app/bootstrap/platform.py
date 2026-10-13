@@ -23,6 +23,7 @@ from app.platform.retention.application.use_cases import RUN_JOB as RETENTION_JO
 from app.platform.retention.wiring import Retention, build_retention
 from app.platform.tenancy.contracts import TenancyFacade
 from app.platform.tenancy.wiring import build_facade
+from app.shared.application.jobs import JobScheduler
 from app.shared.application.understanding import Understanding
 from app.shared.kernel.clock import Clock
 from app.shared.kernel.ids import IdGenerator
@@ -48,6 +49,7 @@ def build_platform(
     whatsapp_gateway: WhatsAppGateway | None = None,
     http_client: httpx.AsyncClient | None = None,
     understanding: Understanding | None = None,
+    jobs: JobScheduler | None = None,
 ) -> Platform:
     modules = [
         *PLATFORM_MODULES,
@@ -61,6 +63,7 @@ def build_platform(
         whatsapp_gateway=whatsapp_gateway,
         http_client=http_client,
         understanding=understanding,
+        jobs=jobs,
     )
     tenancy = build_facade(container)
     identity = build_identity_use_cases(

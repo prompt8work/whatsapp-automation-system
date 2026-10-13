@@ -4,6 +4,7 @@ Multi-tenant platform that automates WhatsApp Business conversations. First modu
 
 - **What it does:** [docs/PRD.md](docs/PRD.md)
 - **How it is built:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Read §3 (layer rules) and §11 (cookbook) before changing code.
+- **Full setup (Meta WhatsApp, QR code demo, payments, Vercel):** [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
 
 | Part | Stack | Folder |
 |---|---|---|
@@ -30,6 +31,9 @@ uv run uvicorn app.main:app --reload --port 8000
 uv run python -m app.bootstrap.cli create-superadmin --email you@example.com --name "You"
 uv run python -m app.bootstrap.cli create-tenant --name "Sunrise Clinic" --slug sunrise-clinic --module appointments
 uv run python -m app.bootstrap.cli add-member --tenant sunrise-clinic --email admin@example.com --name "Clinic Admin" --role admin
+# Optional: a demo clinic full of realistic data (bookings, payments, inbox, privacy requests).
+# Logins: admin@sunrise.demo / reception@sunrise.demo / dr.mehta@sunrise.demo (password prompted)
+uv run python -m app.bootstrap.cli seed-demo        # add --reset to delete and recreate the demo clinic
 # Background jobs: Vercel Cron calls /internal/jobs/tick every minute; locally run it by hand:
 uv run python -m app.bootstrap.cli tick
 

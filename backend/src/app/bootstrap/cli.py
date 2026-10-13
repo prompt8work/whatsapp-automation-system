@@ -8,6 +8,7 @@
     set-credentials --phone-number-id 1098...        # Meta access token, prompted, stored encrypted
     simulate --tenant sunrise-clinic --from 919876543210   # chat with the bot in the terminal
     tick        # run due events/jobs once (local dev, instead of Vercel Cron)
+    seed-demo [--reset]   # a demo clinic full of realistic data (local only; password prompted)
 
 Passwords and tokens are prompted (never pass secrets on the command line - shell history).
 """
@@ -21,6 +22,7 @@ import sys
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from app.bootstrap.demo import seed_demo
 from app.bootstrap.platform import Platform, build_platform
 from app.bootstrap.settings import get_settings
 from app.platform.identity.application.commands.create_user import CreateUserCommand
@@ -108,6 +110,13 @@ async def run(args: argparse.Namespace, p: Platform) -> None:
 
     elif args.command == "simulate":
         await _simulate(p, args)
+
+    elif args.command == "seed-demo":
+        if not c.settings.is_local:
+            sys.exit("seed-demo is for local development only")
+        password = _secret("Password for the demo logins (min 10 chars): ")
+        print("Creating the demo clinic (takes about 30 s)...")
+        print(await seed_demo(c.settings, password, reset=args.reset))
 
     elif args.command == "tick":
         jobs_uow = SqlJobsUnitOfWork(c.session_factory)
@@ -211,6 +220,8 @@ def main() -> None:
     )
 
     sub.add_parser("tick")
+    cmd = sub.add_parser("seed-demo")
+    cmd.add_argument("--reset", action="store_true", help="delete the demo clinic first")
 
     args = parser.parse_args()
     platform = build_platform(get_settings())

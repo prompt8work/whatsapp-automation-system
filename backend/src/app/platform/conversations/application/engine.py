@@ -109,8 +109,16 @@ class FlowEngine:
 
         try:
             result = await step.handle(ctx, ctx.reply)
-        except DomainError:
-            log.warning("flow.step_error", extra={"flow": flow.key, "step": step.key})
+        except DomainError as exc:
+            log.warning(
+                "flow.step_error",
+                extra={
+                    "flow": flow.key,
+                    "step": step.key,
+                    "error": exc.code,
+                    "detail": exc.message,
+                },
+            )
             result = Retry("conversations.try_again")
 
         match result:
