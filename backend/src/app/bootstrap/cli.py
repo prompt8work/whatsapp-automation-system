@@ -7,7 +7,7 @@
     connect-whatsapp --tenant sunrise-clinic --phone-number-id 1098... --display-phone "+91 ..."
     set-credentials --phone-number-id 1098...        # Meta access token, prompted, stored encrypted
     simulate --tenant sunrise-clinic --from 919876543210   # chat with the bot in the terminal
-    tick        # run due events/jobs once (local dev, instead of Vercel Cron)
+    tick        # run due events/jobs once (local dev, instead of the scheduler)
     seed-demo [--reset]   # a demo clinic full of realistic data (local only; password prompted)
 
 Passwords and tokens are prompted (never pass secrets on the command line - shell history).

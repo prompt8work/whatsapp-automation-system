@@ -1,6 +1,6 @@
-"""/internal/jobs/tick - called every minute by Vercel Cron (backend/vercel.json).
+"""/internal/jobs/tick - called every minute by an external scheduler (cron-job.org).
 
-Vercel Cron sends `Authorization: Bearer $CRON_SECRET`. Not under /api, so the dashboard's
+The scheduler sends `Authorization: Bearer $CRON_SECRET`. Not under /api, so the dashboard's
 /api rewrite never exposes it. Order: deliver events first (they may schedule jobs), then jobs.
 """
 

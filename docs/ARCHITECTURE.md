@@ -677,7 +677,7 @@ Every PRD acceptance criterion (§15) has at least one automated test, named aft
 | Region | `bom1` for functions. The database is in `ap-south-1`. |
 | Database | Neon or Supabase Postgres through the Vercel Marketplace. The **pooled** URL is used at runtime, and the direct URL for migrations. SQLAlchemy async uses **psycopg 3** with `NullPool` and `prepare_threshold=None`, because the external pooler does the pooling. |
 | Migrations | Run in CI with `alembic upgrade head` (direct URL, as `app_owner`) **before** the deploy is promoted. |
-| Cron | `backend/vercel.json` → `{"path": "/internal/jobs/tick", "schedule": "* * * * *"}` (Pro plan; added with the jobs module in build step 2) |
+| Cron | External scheduler (cron-job.org) → `GET /internal/jobs/tick` every minute with `Authorization: Bearer $CRON_SECRET`. Vercel Hobby only allows daily crons; on Pro, a `crons` entry in `backend/vercel.json` works instead |
 | Queues | Vercel Queues topics: `outbox`, `outbound-messages` |
 | Secrets | Vercel environment variables: `DATABASE_URL`, `DATABASE_DIRECT_URL`, `DATABASE_PURGE_URL`, `JWT_SECRET`, `CRON_SECRET`, `META_APP_SECRET`, per-tenant tokens (stored **encrypted** in the database, with the key in an environment variable) |
 | Local development | `docker compose up db` → `uv run fastapi dev` + `npm run dev`. `InlineQueue` replaces Vercel Queues, and `POST /internal/jobs/tick` is triggered by hand or by a small loop. A tunnel (ngrok / cloudflared) is used for Meta webhooks. |

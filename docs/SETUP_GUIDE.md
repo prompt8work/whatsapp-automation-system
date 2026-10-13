@@ -9,7 +9,7 @@ There are two ways to run it:
 | | **Path A: laptop + tunnel** (best for a demo) | **Path B: Vercel production** |
 |---|---|---|
 | Where it runs | Your Mac, with ngrok/cloudflared giving Meta a public URL | Vercel (API + dashboard) + Neon/Supabase Postgres |
-| Cost | Free | Vercel **Pro** is needed for the every-minute cron |
+| Cost | Free | Free (Vercel Hobby + Supabase free + cron-job.org) |
 | Time | About 1–2 hours, most of it Meta setup | Path A plus about 1 hour |
 | Sections | 1 → 9, then 11 | 1, 3, 5–8, then 10 |
 
@@ -211,7 +211,7 @@ uv run python -m app.bootstrap.cli set-credentials --phone-number-id <PHONE_NUMB
 ### 4.6 Start the background-job loop (required)
 
 Confirmations after staff approve a request, payment messages, request expiry, reminders and
-retention all run as background jobs. In production Vercel Cron triggers them every minute.
+retention all run as background jobs. In production an external scheduler (cron-job.org) triggers them every minute (10.5).
 On your laptop, keep this running in its own terminal:
 
 ```bash
@@ -348,6 +348,10 @@ Only the message text is sent, never names or phone numbers. If the AI fails, th
 
 1. Create the project and a database named `wa_platform`. If you use a different name, change it in `init.sql`.
 2. In the provider's SQL console, run [infra/postgres/init.sql](../infra/postgres/init.sql). **Change the three passwords first.**
+   **On Supabase:** use the built-in `postgres` database instead (replace `wa_platform` with `postgres`, drop the
+   `\connect` line, and add `GRANT app_owner TO postgres;` before `ALTER SCHEMA`). Connect through the pooler
+   `aws-0-<region>.pooler.supabase.com` with user `<role>.<project-ref>`: port **6543** (transaction) for the pooled
+   URLs, and port **5432** (session) for the migration URL, because the direct `db.<ref>.supabase.co` host is IPv6-only.
 3. Build three connection strings (use the `postgresql+psycopg://` prefix):
 
 | Env var | Role | Connection type |
@@ -368,7 +372,7 @@ Only the message text is sent, never names or phone numbers. If the AI fails, th
 ### 10.2 API project (`backend/`)
 
 1. In Vercel, **Add New → Project →** import the repo, then set **Root Directory = `backend`**.
-2. Region `bom1` and the cron are already set in `backend/vercel.json`. The every-minute cron needs the **Pro** plan.
+2. Region `bom1` is already set in `backend/vercel.json`. There's no Vercel cron (Hobby only allows daily); see 10.5.
 3. Environment variables:
 
 ```dotenv
@@ -378,7 +382,7 @@ DATABASE_URL=...            # pooled, app_rw
 DATABASE_PURGE_URL=...      # pooled, app_purge
 DATABASE_MIGRATION_URL=...  # direct, app_owner
 JWT_SECRET=<token_urlsafe(48)>
-CRON_SECRET=<token_urlsafe(48)>       # Vercel Cron sends it as "Authorization: Bearer ..."
+CRON_SECRET=<token_urlsafe(48)>       # the scheduler sends it as "Authorization: Bearer ..."
 CORS_ORIGINS=["https://<web-project>.vercel.app"]
 WHATSAPP_SENDER=meta
 META_GRAPH_API_VERSION=v23.0
@@ -401,6 +405,17 @@ The app **refuses to start** in production if `JWT_SECRET` or `CRON_SECRET` stil
 - Meta webhook callback: `https://<api-project>.vercel.app/webhooks/whatsapp`
 - Razorpay webhook: `https://<api-project>.vercel.app/webhooks/razorpay/<tenant_id>`
 - Health check: open `https://<api-project>.vercel.app/docs`, and see **System status** in the dashboard.
+
+### 10.5 Background jobs tick (cron-job.org)
+
+Vercel Hobby only runs crons once a day, so a free external scheduler calls the tick endpoint instead.
+
+1. Sign up at [cron-job.org](https://cron-job.org) and click **Create cronjob**.
+2. URL: `https://<api-project>.vercel.app/internal/jobs/tick`. Schedule: **every minute**.
+3. Under **Advanced → Headers**, add `Authorization` = `Bearer <CRON_SECRET>`, using the same value as in Vercel.
+4. Save, then check the job's history: each run should return **200** with JSON counts. A **401** means the secret doesn't match.
+
+The tick also keeps the Supabase free project active, so it doesn't pause after a week without traffic.
 
 ---
 
@@ -439,7 +454,7 @@ The app **refuses to start** in production if `JWT_SECRET` or `CRON_SECRET` stil
 | Meta error **190 / token expired** | You used the 24 h temporary token. Make a System User token (3.4) and run `set-credentials` again |
 | Meta error **131047 / re-engagement** | More than 24 h since the patient's last message. Map a template (section 6) |
 | Bot says **no slots available** | No doctor hours today, minimum notice too high, or the booking horizon is too short |
-| Patient gets **no confirmation after Approve** | The tick loop isn't running (4.6), or Vercel Cron isn't active (Pro plan) |
+| Patient gets **no confirmation after Approve** | The tick loop isn't running (4.6), or the cron-job.org job is failing (10.5) |
 | Razorpay **paid, but app still shows pending** | Wrong webhook URL or tenant id, wrong secret, or the `payment_link.paid` event isn't ticked |
 | Saving secrets fails / **can't decrypt** credentials | `CREDENTIALS_KEY` is empty or was changed. Set it back to the original key, or enter the secrets again |
 | `cli simulate` refuses to run | It only works with `WHATSAPP_SENDER=recording`, so it can never message real people |

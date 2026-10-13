@@ -60,7 +60,7 @@ DOMAIN = "sunrise.demo"
 
 class NoJobs:
     """Job scheduler for the time-shifted copies of the app: their jobs would be due at once
-    in real time, so a running `cli tick` loop (or Vercel Cron) would grab them mid-seed -
+    in real time, so a running `cli tick` loop (or the prod scheduler) would grab them mid-seed -
     e.g. process a chat message twice. The seeder finishes everything itself, so it needs none."""
 
     async def schedule(self, job: ScheduleJob) -> None:
@@ -96,7 +96,7 @@ class Clinic:
         return response.json() if response.content else None
 
     async def tick(self) -> None:
-        """Deliver events and run due jobs, as Vercel Cron does every minute."""
+        """Deliver events and run due jobs, as the production scheduler does every minute."""
         c = self.platform.container
         uow = SqlJobsUnitOfWork(c.session_factory)
         for _ in range(3):  # handlers may create more events / jobs

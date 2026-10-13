@@ -34,7 +34,7 @@ uv run python -m app.bootstrap.cli add-member --tenant sunrise-clinic --email ad
 # Optional: a demo clinic full of realistic data (bookings, payments, inbox, privacy requests).
 # Logins: admin@sunrise.demo / reception@sunrise.demo / dr.mehta@sunrise.demo (password prompted)
 uv run python -m app.bootstrap.cli seed-demo        # add --reset to delete and recreate the demo clinic
-# Background jobs: Vercel Cron calls /internal/jobs/tick every minute; locally run it by hand:
+# Background jobs: an external scheduler (cron-job.org) calls /internal/jobs/tick every minute; locally run it by hand:
 uv run python -m app.bootstrap.cli tick
 
 # Chat with the bot in the terminal (no Meta needed; WHATSAPP_SENDER=recording):

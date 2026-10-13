@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 14
 
-    # Shared secret Vercel Cron sends as `Authorization: Bearer <secret>`.
+    # Shared secret the tick scheduler sends as `Authorization: Bearer <secret>`.
     cron_secret: SecretStr = SecretStr(_LOCAL_CRON_SECRET)
 
     # WhatsApp (ARCHITECTURE §7). "recording" logs outgoing messages instead of calling Meta -

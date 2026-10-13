@@ -14,11 +14,5 @@
       "source": "/(.*)",
       "destination": "/index.py"
     }
-  ],
-  "crons": [
-    {
-      "path": "/internal/jobs/tick",
-      "schedule": "* * * * *"
-    }
   ]
 }
